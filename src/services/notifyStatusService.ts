@@ -7,7 +7,8 @@
  * Integration: desnz-syeia-integration-service
  */
 
-import logger from '../utils/logger';
+const getLogger = require('../utils/loggerHelper');
+const logger = getLogger(module);
 
 interface EmailSentCallbackData {
   callbackId: string;

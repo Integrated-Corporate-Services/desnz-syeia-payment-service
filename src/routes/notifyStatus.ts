@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { handleEmailSent, handleEmailFailed, healthCheck } from '../controllers/notifyCallbackController';
+import { handleEmailSent, handleEmailFailed, healthCheck } from '../controllers/notifyStatusController';
 
 const router = Router();
 

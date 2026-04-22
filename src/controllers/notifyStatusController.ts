@@ -10,9 +10,11 @@
  */
 
 import { Request, Response } from 'express';
-import { processEmailSentCallback, processEmailFailedCallback } from '../services/notifyCallbackService';
-import logger from '../utils/logger';
-import { v4 as uuidv4 } from 'uuid';
+import { processEmailSentCallback, processEmailFailedCallback } from '../services/notifyStatusService';
+
+const getLogger = require('../utils/loggerHelper');
+const logger = getLogger(module);
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Handle email sent callback from Lambda processor
