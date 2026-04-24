@@ -47,7 +47,7 @@ describe('Callback Service Integration Tests', () => {
     });
   });
 
-  describe('POST /callback/webhook', () => {
+  describe('POST /callback/payment', () => {
     const webhookBody = {
       webhook_id: 'evt_test_12345',
       event_type: 'PAYMENT_COMPLETED',
@@ -80,7 +80,7 @@ describe('Callback Service Integration Tests', () => {
 
       // Act
       const response = await request(app)
-        .post('/callback/webhook')
+        .post('/callback/payment')
         .set('X-Webhook-Signature', signature)
         .set('X-Webhook-ID', webhookBody.webhook_id)
         .send(webhookBody);
@@ -100,7 +100,7 @@ describe('Callback Service Integration Tests', () => {
 
       // Act
       const response = await request(app)
-        .post('/callback/webhook')
+        .post('/callback/payment')
         .set('X-Webhook-Signature', invalidSignature)
         .set('X-Webhook-ID', webhookBody.webhook_id)
         .send(webhookBody);
@@ -115,7 +115,7 @@ describe('Callback Service Integration Tests', () => {
     it('should reject webhook without signature', async () => {
       // Act
       const response = await request(app)
-        .post('/callback/webhook')
+        .post('/callback/payment')
         .set('X-Webhook-ID', webhookBody.webhook_id)
         .send(webhookBody);
 
@@ -133,7 +133,7 @@ describe('Callback Service Integration Tests', () => {
 
       // Act
       const response = await request(app)
-        .post('/callback/webhook')
+        .post('/callback/payment')
         .set('X-Webhook-Signature', signature)
         .set('X-Webhook-ID', webhookBody.webhook_id)
         .send(webhookBody);
@@ -162,7 +162,7 @@ describe('Callback Service Integration Tests', () => {
 
       // Act
       const response = await request(app)
-        .post('/callback/webhook')
+        .post('/callback/payment')
         .set('X-Webhook-Signature', signature)
         .set('X-Webhook-ID', webhookBody.webhook_id)
         .send(webhookBody);

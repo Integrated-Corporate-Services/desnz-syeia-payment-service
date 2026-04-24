@@ -3,15 +3,16 @@
 
 const dotenv = require('dotenv');
 
+// Load .env file first
+dotenv.config();
+
+// Check if we're in local environment AFTER loading .env
 const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
 
-// Load environment-specific env file
+// Load environment-specific env file if in local mode
 if (isLocal) {
   const envFile = `.env.${process.env.NODE_ENV || 'local'}`;
-  const result = dotenv.config({ path: envFile });
-  if (result.error) {
-    dotenv.config(); // Fallback to .env
-  }
+  dotenv.config({ path: envFile }); // This will override with .env.local if it exists
 }
 
 /**
@@ -124,6 +125,15 @@ export const webhookConfig = {
 };
 
 /**
+ * GOV.UK Pay Configuration
+ */
+export const govPayConfig = {
+  apiUrl: getConfigValue('GOVPAY_API_URL', 'https://publicapi.payments.service.gov.uk/v1/payments'),
+  apiKey: getConfigValue('GOVPAY_API_KEY'), // Required
+  timeout: getNumberConfig('GOVPAY_TIMEOUT', 10000), // 10 seconds
+};
+
+/**
  * Feature Flags
  */
 export const featureFlags = {
@@ -151,6 +161,9 @@ export const awsConfig = {
   region: getConfigValue('AWS_REGION', 'eu-west-2'),
   endpoint: getConfigValue('AWS_ENDPOINT', ''), // LocalStack for local dev (empty string = not used)
   sqsQueueUrl: getConfigValue('PAYMENT_WEBHOOK_QUEUE_URL', ''),
+  accessKeyId: getConfigValue('AWS_ACCESS_KEY_ID', ''), // Optional - uses IAM role if not provided
+  secretAccessKey: getConfigValue('AWS_SECRET_ACCESS_KEY', ''), // Optional - uses IAM role if not provided
+  sqsEnabled: getBooleanConfig('SQS_ENABLED', false), // Enable/disable SQS integration
 };
 
 /**
@@ -162,6 +175,10 @@ function validateConfig(): void {
   // Validate required configurations
   if (!webhookConfig.signingKey) {
     errors.push('GOVPAY_WEBHOOK_SIGNING_KEY is required');
+  }
+
+  if (!govPayConfig.apiKey) {
+    errors.push('GOVPAY_API_KEY is required');
   }
 
   if (!dbConfig.password) {
@@ -201,6 +218,7 @@ export default {
   db: dbConfig,
   backend: backendConfig,
   webhook: webhookConfig,
+  govPay: govPayConfig,
   features: featureFlags,
   security: securityConfig,
   aws: awsConfig,
@@ -213,6 +231,7 @@ module.exports = {
   dbConfig,
   backendConfig,
   webhookConfig,
+  govPayConfig,
   featureFlags,
   securityConfig,
   awsConfig,
@@ -224,6 +243,7 @@ module.exports = {
     db: dbConfig,
     backend: backendConfig,
     webhook: webhookConfig,
+    govPay: govPayConfig,
     features: featureFlags,
     security: securityConfig,
     aws: awsConfig,

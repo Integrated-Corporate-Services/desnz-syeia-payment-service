@@ -1,5 +1,5 @@
 // Logger utility with structured logging (matching backend patterns)
-const config = require('../config/config');
+const config = require('../config/config').default;
 
 const LOG_LEVELS = {
   error: 0,

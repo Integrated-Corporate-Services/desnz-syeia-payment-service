@@ -6,11 +6,11 @@ export {}; // Make this a module
 const getLogger = require('../utils/loggerHelper');
 const logger = getLogger(module);
 const paymentWebhookRepository = require('../repositories/paymentWebhookRepository');
-const axios = require('axios');
-const config = require('../config/config');
+const paymentRepository = require('../repositories/paymentRepository');
+const config = require('../config/config').default;
+const sqsService = require('./sqsService');
 const { 
   RETRYABLE_ERROR_CODES, 
-  RETRYABLE_ERROR_MESSAGES, 
   RETRYABLE_ERROR_KEYWORDS,
   ERROR_CODES 
 } = require('../constants');
@@ -24,9 +24,6 @@ interface WebhookProcessingResult {
   retryable?: boolean;
 }
 
-/**
- * Categorize error as retryable or permanent
- */
 function isRetryableError(error: any): boolean {
   const errorMessage = error?.message || error?.toString() || '';
   const errorCode = error?.code || '';
@@ -36,23 +33,15 @@ function isRetryableError(error: any): boolean {
     return true;
   }
 
-  // Check if error message contains retryable keywords
-  if (RETRYABLE_ERROR_MESSAGES.some((e: string) => errorMessage.includes(e))) {
-    return true;
-  }
-
-  // Network errors are typically retryable
-  if (RETRYABLE_ERROR_KEYWORDS.test(errorMessage)) {
+  // Check if error message contains any retryable keywords
+  const lowerMessage = errorMessage.toLowerCase();
+  if (RETRYABLE_ERROR_KEYWORDS.some((keyword: string) => lowerMessage.includes(keyword.toLowerCase()))) {
     return true;
   }
 
   return false;
 }
 
-/**
- * Process webhook event
- * Handles: deduplication, primary processing, retries, and dead-letter queue
- */
 async function processWebhook(
   webhookId: string,
   paymentId: string,
@@ -69,9 +58,8 @@ async function processWebhook(
     correlationId,
   });
 
-  // Feature flag check
   if (!config.features.callbackServiceEnabled) {
-    logger.warn('[WebhookService] Callback service is disabled via feature flag', {
+    logger.warn('[WebhookService] Callback service is disabled', {
       webhookId,
       correlationId,
     });
@@ -85,7 +73,6 @@ async function processWebhook(
   }
 
   try {
-    // Step 1: Check for duplicates
     const existingWebhook = await paymentWebhookRepository.findByWebhookId(webhookId);
 
     if (existingWebhook) {
@@ -103,7 +90,6 @@ async function processWebhook(
       };
     }
 
-    // Step 2: Create initial record for tracking
     await paymentWebhookRepository.createWebhook({
       webhook_id: webhookId,
       payment_id: paymentId,
@@ -115,106 +101,86 @@ async function processWebhook(
       correlation_id: correlationId,
     });
 
-    // Step 3: Process the webhook event
-    if (!config.features.retryEnabled) {
-      logger.warn('[WebhookService] Retry feature is disabled', { webhookId, correlationId });
-    }
+    // Payment status updates are handled asynchronously by Lambda/SQS processing.
+    // No GOV.UK Pay API calls are made in the inbound receiver.
 
-    let backendResult;
-    try {
-      const backendUrl = config.backend.url;
-      const timeout = config.backend.timeout;
-
-      backendResult = await axios.post(
-        `${backendUrl}/callback/webhook-processed`,
-        {
+    // Send to SQS for Lambda processing
+    if (config.aws.sqsEnabled && config.aws.sqsQueueUrl) {
+      try {
+        const sqsResult = await sqsService.sendWebhookToSQS({
           webhookId,
           paymentId,
-          event,
+          eventType: event.event_type || 'unknown',
+          payload: event,
           correlationId,
-        },
-        {
-          timeout,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Correlation-ID': correlationId,
-          },
-        }
-      );
+        });
 
-      logger.info('[WebhookService] Webhook processed by backend', {
-        webhookId,
-        paymentId,
-        backendStatus: backendResult.status,
-        processingTimeMs: Date.now() - startTime,
-        correlationId,
-      });
-
-      // Update status to success
-      await paymentWebhookRepository.updateWebhookStatus(webhookId, 'success', {
-        processedAt: new Date(),
-        backendResponse: backendResult.data,
-      });
-
-      logger.info('[WebhookService] Webhook processing complete', {
-        webhookId,
-        paymentId,
-        totalTimeMs: Date.now() - startTime,
-        correlationId,
-      });
-
-      return {
-        success: true,
-        isDuplicate: false,
-        paymentId,
-      };
-    } catch (processingError: any) {
-      logger.error('[WebhookService] Backend processing failed', {
-        webhookId,
-        paymentId,
-        error: processingError.message,
-        code: processingError.code,
-        statusCode: processingError.response?.status,
-        correlationId,
-      });
-
-      const isRetryable = isRetryableError(processingError);
-
-      if (isRetryable && config.features.retryEnabled) {
-        await paymentWebhookRepository.recordRetryableError(
+        logger.info('[WebhookService] Sent to SQS for Lambda processing', {
           webhookId,
-          'Backend processing failed: ' + String(processingError.message),
-          config.webhook.retryIntervals
-        );
+          paymentId,
+          messageId: sqsResult.messageId,
+          correlationId,
+        });
 
+        // Lambda will update the final status based on event type
+        // Do NOT update status here to avoid race conditions
+        logger.info('[WebhookService] Webhook queued for Lambda - status will be updated by Lambda', {
+          webhookId,
+          paymentId,
+          sqsMessageId: sqsResult.messageId,
+        });
+
+        // Return immediately after sending to SQS - Lambda will handle additional processing
         return {
-          success: false,
+          success: true,
           isDuplicate: false,
           paymentId,
-          error: 'Backend processing failed',
-          errorCode: ERROR_CODES.BACKEND_SERVICE_ERROR,
-          retryable: true,
         };
-      } else {
-        if (config.features.dlqEnabled) {
-          await paymentWebhookRepository.moveToDeadLetterQueue(
-            webhookId,
-            'Backend processing failed: ' + String(processingError.message)
-          );
-        }
+      } catch (sqsError: any) {
+        logger.error('[WebhookService] Failed to send to SQS', {
+          webhookId,
+          paymentId,
+          error: sqsError.message,
+          correlationId,
+        });
+
+        // Mark webhook as failed (SQS send failed)
+        await paymentWebhookRepository.updateWebhookStatus(webhookId, 'failed', {
+          error: sqsError.message,
+        });
+
+        // Still return success - webhook is stored and can be reprocessed
+        logger.warn('[WebhookService] SQS send failed but webhook stored for retry', {
+          webhookId,
+          paymentId,
+          correlationId,
+        });
 
         return {
-          success: false,
+          success: true,
           isDuplicate: false,
           paymentId,
-          error: 'Backend processing failed',
-          errorCode: isRetryable 
-            ? ERROR_CODES.BACKEND_SERVICE_UNAVAILABLE 
-            : ERROR_CODES.BACKEND_SERVICE_ERROR,
-          retryable: false,
         };
       }
     }
+
+    // SQS is disabled - mark webhook as processing (awaiting manual action)
+    logger.info('[WebhookService] SQS disabled - webhook stored for manual processing', {
+      webhookId,
+      paymentId,
+      correlationId,
+    });
+
+    await paymentWebhookRepository.updateWebhookStatus(webhookId, 'processing', {
+      processedAt: new Date(),
+      note: 'SQS processing disabled',
+    });
+
+    return {
+      success: true,
+      isDuplicate: false,
+      paymentId,
+    };
   } catch (error: any) {
     const errorMessage = error.message || String(error);
     const retryable = isRetryableError(error);
@@ -229,20 +195,12 @@ async function processWebhook(
     });
 
     try {
-      // Record error and determine next action
       if (retryable && config.features.retryEnabled) {
-        // Schedule retry
         await paymentWebhookRepository.recordRetryableError(
           webhookId,
           errorMessage,
           config.webhook.retryIntervals
         );
-
-        logger.info('[WebhookService] Scheduled retry', {
-          webhookId,
-          paymentId,
-          correlationId,
-        });
 
         return {
           success: false,
@@ -253,17 +211,9 @@ async function processWebhook(
           retryable: true,
         };
       } else {
-        // Move to dead-letter queue
         if (config.features.dlqEnabled) {
           await paymentWebhookRepository.moveToDeadLetterQueue(webhookId, errorMessage);
         }
-
-        logger.error('[WebhookService] Moved to dead-letter queue', {
-          webhookId,
-          paymentId,
-          reason: errorMessage,
-          correlationId,
-        });
 
         return {
           success: false,
@@ -275,11 +225,11 @@ async function processWebhook(
         };
       }
     } catch (errorHandlingFailed: any) {
-      logger.error('[WebhookService] Failed to handle error', {
+      logger.error('[WebhookService] Error handling failed', {
         webhookId,
         paymentId,
         originalError: errorMessage,
-        errorHandlingError: errorHandlingFailed.message,
+        handlingError: errorHandlingFailed.message,
       });
 
       return {

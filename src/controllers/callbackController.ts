@@ -7,10 +7,18 @@ const getLogger = require('../utils/loggerHelper');
 const logger = getLogger(module);
 const { processWebhook } = require('../services/paymentWebhookService');
 const { v4: uuidv4 } = require('uuid');
+const paymentWebhookRepository = require('../repositories/paymentWebhookRepository');
 
 /**
  * Handle webhook endpoint
  * POST /webhook
+ * 
+ * Flow:
+ * 1. Signature verification (done by middleware)
+ * 2. Store webhook in DB with 'processing' status
+ * 3. Return IMMEDIATE response with 202 Accepted
+ * 4. Send to SQS for async Lambda processing
+ * 5. Lambda processes in background and updates status
  * 
  * This endpoint receives webhook events from GOV.UK Pay
  * Signature verification is done via middleware
@@ -32,7 +40,7 @@ async function handleWebhook(req: any, res: any) {
     // Capture raw body for storage
     const rawPayload = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
-    // Process webhook asynchronously
+    // Process webhook (stores in DB and sends to SQS)
     const result = await processWebhook(
       webhookId,
       paymentId,
@@ -41,6 +49,7 @@ async function handleWebhook(req: any, res: any) {
       correlationId
     );
 
+    // Handle duplicate webhooks
     if (result.isDuplicate) {
       logger.info('[CallbackController] Duplicate webhook acknowledged', {
         webhookId,
@@ -48,29 +57,35 @@ async function handleWebhook(req: any, res: any) {
         correlationId,
       });
 
-      return res.json({
-        status: 'received',
+      return res.status(200).json({
+        status: 'duplicate',
+        webhookId,
+        paymentId,
+        message: 'Duplicate webhook - already processed',
         isDuplicate: true,
-        message: 'Duplicate webhook acknowledged',
       });
     }
 
+    // SUCCESS: Webhook stored and queued for processing
     if (result.success) {
-      logger.info('[CallbackController] Webhook processed successfully', {
+      logger.info('[CallbackController] Webhook stored and queued for Lambda processing', {
         webhookId,
         paymentId,
         correlationId,
       });
 
-      return res.json({
-        status: 'received',
+      // IMMEDIATE RESPONSE - Don't wait for Lambda!
+      // Lambda will process in background and update status
+      return res.status(202).json({
+        status: 'processing',
         webhookId,
         paymentId,
         message: 'Webhook received and queued for processing',
+        queuedAt: new Date().toISOString(),
       });
     }
 
-    // Handle failures
+    // Handle retryable errors
     if (result.retryable) {
       logger.warn('[CallbackController] Webhook processing retryable error', {
         webhookId,

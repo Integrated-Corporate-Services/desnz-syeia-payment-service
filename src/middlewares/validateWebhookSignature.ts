@@ -1,5 +1,6 @@
 // Webhook Signature Verification Middleware
 // Verifies webhook signature from GOV.UK Pay
+// Official Documentation: https://docs.payments.service.gov.uk/webhooks/
 
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
@@ -12,21 +13,27 @@ interface WebhookSignatureOptions {
 }
 
 interface WebhookEvent {
-  webhook_id: string;
+  webhook_message_id: string; // Updated to match official GOV.UK Pay spec
+  api_version: number;
   event_type: string;
   created_date: string;
+  resource_id: string;
+  resource_type: string;
   resource: Record<string, any>;
 }
 
 /**
  * Extract webhook signature and ID from request headers
+ * GOV.UK Pay uses 'Pay-Signature' header (case-insensitive in Node.js)
  */
 export function extractWebhookHeaders(req: any): {
   signature: string | null;
   webhookId: string | null;
 } {
-  const signature = req.headers['x-webhook-signature'] || null;
-  const webhookId = req.headers['x-webhook-id'] || (req.body?.webhook_id || null);
+  // Official GOV.UK Pay header name is 'Pay-Signature'
+  const signature = req.headers['pay-signature'] || null;
+  // webhook_message_id comes from body, not headers
+  const webhookId = req.body?.webhook_message_id || null;
   return { signature, webhookId };
 }
 
@@ -55,6 +62,7 @@ export function verifyWebhookSignature(
 
 /**
  * Parse and validate webhook event structure
+ * Matches official GOV.UK Pay webhook message format
  */
 export function parseWebhookEvent(rawBody: any): WebhookEvent | null {
   try {
@@ -63,21 +71,27 @@ export function parseWebhookEvent(rawBody: any): WebhookEvent | null {
       return null;
     }
 
-    const { webhook_id, event_type, created_date, resource } = rawBody;
+    const { webhook_message_id, api_version, event_type, created_date, resource_id, resource_type, resource } = rawBody;
 
-    if (!webhook_id || !event_type || !resource) {
+    if (!webhook_message_id || !event_type || !resource || !resource_id || !resource_type) {
       logger.warn('[Webhook] Webhook missing required fields', {
-        hasWebhookId: !!webhook_id,
+        hasWebhookMessageId: !!webhook_message_id,
+        hasApiVersion: !!api_version,
         hasEventType: !!event_type,
+        hasResourceId: !!resource_id,
+        hasResourceType: !!resource_type,
         hasResource: !!resource,
       });
       return null;
     }
 
     return {
-      webhook_id,
+      webhook_message_id,
+      api_version: api_version || 1,
       event_type,
       created_date,
+      resource_id,
+      resource_type,
       resource,
     };
   } catch (error) {
@@ -90,14 +104,15 @@ export function parseWebhookEvent(rawBody: any): WebhookEvent | null {
 
 /**
  * Extract payment ID from webhook event
+ * According to GOV.UK Pay docs, resource.payment_id contains the payment ID
  */
 export function extractPaymentIdFromEvent(event: WebhookEvent): string | null {
-  // GOV.UK Pay uses 'external_id' for custom reference, or 'payment_id' as fallback
-  const paymentId = event.resource?.external_id || event.resource?.payment_id;
+  // resource_id is the same as payment_id, but payment_id is also in resource object
+  const paymentId = event.resource_id || event.resource?.payment_id;
 
   if (!paymentId) {
     logger.warn('[Webhook] Unable to extract payment ID from event', {
-      webhookId: event.webhook_id,
+      webhookMessageId: event.webhook_message_id,
     });
     return null;
   }
@@ -116,7 +131,7 @@ export function validateWebhookSignature(
   const { signature, webhookId } = extractWebhookHeaders(req);
 
   if (!signature || !webhookId) {
-    return { valid: false, error: ERROR_MESSAGES.MISSING_SIGNATURE };
+    return { valid: false, error: 'Invalid webhook signature' };
   }
 
   // Get raw body

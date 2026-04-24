@@ -18,10 +18,18 @@ export const WEBHOOK_STATUS = {
 
 /**
  * GOV.UK Pay Webhook Event Types
- * As per GOV.UK Pay API documentation
- * @see https://docs.payments.service.gov.uk/api_reference/#payment-events
+ * Official event types as documented by GOV.UK Pay
+ * @see https://docs.payments.service.gov.uk/webhooks/#receive-automatic-payment-event-updates-using-webhooks
  */
 export const WEBHOOK_EVENT_TYPES = {
+  // Payment event types (used for application flow)
+  CARD_PAYMENT_SUCCEEDED: 'card_payment_succeeded',      // Payment service provider has authorised the payment
+  CARD_PAYMENT_CAPTURED: 'card_payment_captured',        // GOV.UK Pay has taken ('captured') the payment from user's bank account
+  CARD_PAYMENT_REFUNDED: 'card_payment_refunded',        // Refund has been sent to user's bank account by payment service provider
+  
+  // Note: card_payment_settled is available but not used - it's for reconciliation/accounting purposes only
+  
+  // Legacy event types (for backward compatibility - may not be sent by GOV.UK Pay)
   PAYMENT_COMPLETED: 'PAYMENT_COMPLETED',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   PAYMENT_CANCELLED: 'PAYMENT_CANCELLED',
@@ -32,17 +40,24 @@ export const WEBHOOK_EVENT_TYPES = {
 
 /**
  * GOV.UK Pay Payment Status Values
- * As received in webhook payload
+ * As received in webhook payload resource.state.status
+ * @see https://docs.payments.service.gov.uk/api_reference/#payment-status-lifecycle
  */
 export const GOV_UK_PAY_STATUSES = {
-  CREATED: 'created',
-  STARTED: 'started',
-  SUBMITTED: 'submitted',
-  SUCCESS: 'success',
-  FAILED: 'failed',
-  CANCELLED: 'cancelled',
-  ERROR: 'error',
-  CAPTURABLE: 'capturable',
+  // Initial states
+  CREATED: 'created',                    // Payment created but not yet attempted
+  STARTED: 'started',                    // User has started the payment journey
+  SUBMITTED: 'submitted',                // User has submitted payment details to provider
+  
+  // Final states (finished: true)
+  SUCCESS: 'success',                    // Payment completed successfully
+  FAILED: 'failed',                      // Payment failed
+  CANCELLED: 'cancelled',                // Payment cancelled by user or service
+  ERROR: 'error',                        // Payment error occurred
+  
+  // Special states
+  CAPTURABLE: 'capturable',              // Payment authorized and ready to capture (delayed capture)
+  EXPIRED: 'expired',                    // Payment session expired without completion
 } as const;
 
 /**

@@ -20,7 +20,7 @@ const HOST = '0.0.0.0';
       url: `http://${HOST}:${PORT}/health`,
     });
     logger.info('[SERVER] Webhook endpoint available at', {
-      url: `http://${HOST}:${PORT}/callback/webhook`,
+      url: `http://${HOST}:${PORT}/callback/payment`,
     });
   });
 
