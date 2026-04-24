@@ -6,7 +6,6 @@ export {}; // Make this a module
 const getLogger = require('../utils/loggerHelper');
 const logger = getLogger(module);
 const paymentWebhookRepository = require('../repositories/paymentWebhookRepository');
-const paymentRepository = require('../repositories/paymentRepository');
 const config = require('../config/config').default;
 const sqsService = require('./sqsService');
 const { 
