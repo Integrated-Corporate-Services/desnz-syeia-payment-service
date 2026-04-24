@@ -68,20 +68,20 @@ async function handleWebhook(req: any, res: any) {
 
     // SUCCESS: Webhook stored and queued for processing
     if (result.success) {
-      logger.info('[CallbackController] Webhook stored and queued for Lambda processing', {
+      logger.info('[CallbackController] Webhook acknowledged', {
         webhookId,
         paymentId,
+        eventType: webhookEvent?.event_type,
         correlationId,
       });
 
-      // IMMEDIATE RESPONSE - Don't wait for Lambda!
-      // Lambda will process in background and update status
+      // IMMEDIATE RESPONSE with actual webhook data as received
+      // Return the exact webhook payload received from GOV.UK Pay
+      // Lambda will process in background and update database
       return res.status(202).json({
-        status: 'processing',
+        ...webhookEvent,
         webhookId,
-        paymentId,
-        message: 'Webhook received and queued for processing',
-        queuedAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
       });
     }
 
