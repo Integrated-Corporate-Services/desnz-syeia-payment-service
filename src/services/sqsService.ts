@@ -10,13 +10,28 @@ import config from '../config/config';
 const logger = getLogger(module);
 
 /**
+ * SQS Client Configuration Interface
+ */
+interface SQSClientConfig {
+  region: string;
+  credentials?: {
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
+  endpoint?: string;
+  forcePathStyle?: boolean;
+  disableHostPrefix?: boolean;
+  apiVersion?: string;
+}
+
+/**
  * Initialize SQS Client
  */
 let sqsClient: SQSClient | null = null;
 
 function getSQSClient(): SQSClient {
   if (!sqsClient) {
-    const clientConfig: any = {
+    const clientConfig: SQSClientConfig = {
       region: config.aws.region,
       credentials: config.aws.accessKeyId && config.aws.secretAccessKey
         ? {
@@ -41,9 +56,20 @@ function getSQSClient(): SQSClient {
 }
 
 /**
+ * Webhook Data Interface
+ */
+interface WebhookData {
+  webhookId?: string;
+  paymentId?: string;
+  eventType?: string;
+  correlationId?: string;
+  payload: Record<string, unknown>;
+}
+
+/**
  * Send webhook payload to SQS queue
  */
-export async function sendWebhookToSQS(webhookData: any): Promise<{ messageId: string; success: boolean }> {
+export async function sendWebhookToSQS(webhookData: WebhookData): Promise<{ messageId: string; success: boolean }> {
   try {
     const client = getSQSClient();
     const queueUrl = config.aws.sqsQueueUrl;
@@ -116,7 +142,7 @@ export async function sendWebhookToSQS(webhookData: any): Promise<{ messageId: s
 /**
  * Send multiple webhook payloads to SQS in batch
  */
-export async function sendWebhookBatchToSQS(webhookDataArray: any[]): Promise<{ success: boolean; failed: number }> {
+export async function sendWebhookBatchToSQS(webhookDataArray: WebhookData[]): Promise<{ success: boolean; failed: number }> {
   try {
     const client = getSQSClient();
     const queueUrl = config.aws.sqsQueueUrl;
@@ -224,9 +250,3 @@ export async function testSQSConnection(): Promise<boolean> {
     return false;
   }
 }
-
-module.exports = {
-  sendWebhookToSQS,
-  sendWebhookBatchToSQS,
-  testSQSConnection,
-};

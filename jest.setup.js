@@ -22,7 +22,9 @@ process.env.SIGNATURE_VERIFICATION_ENABLED = 'true';
 
 // AWS Configuration (optional for tests)
 process.env.AWS_REGION = 'eu-west-2';
-process.env.AWS_ENDPOINT = ''; // Empty string for tests (not used)
-process.env.PAYMENT_WEBHOOK_QUEUE_URL = '';
-process.env.SQS_ENABLED = 'false'; // Disable SQS in unit tests
+process.env.AWS_ENDPOINT = 'http://localhost:4566'; // LocalStack endpoint for tests
+process.env.AWS_ACCESS_KEY_ID = 'test-key';
+process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+process.env.PAYMENT_WEBHOOK_QUEUE_URL = 'http://localhost:4566/000000000000/payment-webhook-queue';
+process.env.SQS_ENABLED = 'false'; // Disable SQS in unit tests (mocked in SQS service tests)
 

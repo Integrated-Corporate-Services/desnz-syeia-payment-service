@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "Node10",
+    "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationMap": true,

@@ -203,6 +203,9 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     validateConfig();
   } catch (error) {
+    // Use console.error here since logger may not be initialized yet
+    // This is before logger initialization and only runs during module load
+    // eslint-disable-next-line no-console
     console.error('Configuration validation failed:', error);
     if (!isLocal) {
       process.exit(1); // Exit in production, warn in local
