@@ -2,15 +2,9 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 import getLogger from '../utils/loggerHelper';
 import { processWebhook } from '../services/paymentWebhookService';
+import { HTTP_STATUS } from '../constants/error.constants';
 
 const logger = getLogger(module);
-
-// Constants for HTTP status codes and messages
-const HTTP_STATUS = {
-  OK: 200,
-  ACCEPTED: 202,
-  INTERNAL_SERVER_ERROR: 500,
-} as const;
 
 const WEBHOOK_STATUS = {
   DUPLICATE: 'duplicate',
@@ -253,13 +247,46 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
 /**
  * Health check endpoint
  * GET /health
+ * Returns 200 if all checks pass, 503 if any check fails
  */
 async function healthCheck(_req: Request, res: Response): Promise<Response> {
-  return res.status(HTTP_STATUS.OK).json({
+  const { checkDatabaseConnectivity } = require('../database/db');
+  
+  const health: any = {
     status: 'healthy',
     service: 'payment-webhook-receiver',
     timestamp: new Date().toISOString(),
-  });
+    checks: {},
+  };
+
+  // Check database connectivity
+  try {
+    const dbCheck = await checkDatabaseConnectivity();
+    health.checks.database = {
+      status: dbCheck.connected ? 'up' : 'down',
+      latency_ms: dbCheck.latencyMs,
+    };
+
+    if (dbCheck.error) {
+      health.checks.database.error = dbCheck.error;
+    }
+
+    if (!dbCheck.connected) {
+      health.status = 'unhealthy';
+      logger.error('[Health] Database connectivity check failed', { error: dbCheck.error });
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+    }
+  } catch (error) {
+    health.status = 'unhealthy';
+    health.checks.database = {
+      status: 'down',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+    logger.error('[Health] Database check failed', { error: error instanceof Error ? error.message : String(error) });
+    return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+  }
+
+  return res.status(HTTP_STATUS.OK).json(health);
 }
 
 export { handleWebhook, healthCheck };

@@ -3,6 +3,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import callbackRoutes from './routes/callback';
 import getLogger from './utils/loggerHelper';
 import config from './config/config';
+import { HTTP_STATUS } from './constants/error.constants';
 
 const logger = getLogger(module);
 
@@ -80,16 +81,20 @@ export function createApp(): Express {
 
   // Middleware
   // Capture raw body for signature verification before JSON parsing
+  interface RequestWithRawBody extends Request {
+    rawBody?: string;
+  }
+
   app.use(express.json({ 
     limit: '1mb',
-    verify: (req: any, res, buf, encoding) => {
-      req.rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
+    verify: (req: Request, res, buf, encoding) => {
+      (req as RequestWithRawBody).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
     }
   }));
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
   // Request logging middleware
-  app.use((req: Request, res: Response, next: Function) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     logger.info('[HTTP] Request', {
       method: req.method,
       path: req.path,
@@ -101,9 +106,42 @@ export function createApp(): Express {
   // Routes
   app.use('/callback', callbackRoutes);
 
-  // Health check (root level too)
-  app.get('/health', (req: Request, res: Response) => {
-    res.json({ status: 'healthy', service: 'callback-service' });
+  // Health check (root level too) - with DB connectivity check
+  app.get('/health', async (req: Request, res: Response) => {
+    const { checkDatabaseConnectivity } = require('./database/db');
+    
+    const health: any = {
+      status: 'healthy',
+      service: 'callback-service',
+      timestamp: new Date().toISOString(),
+      checks: {},
+    };
+
+    try {
+      const dbCheck = await checkDatabaseConnectivity();
+      health.checks.database = {
+        status: dbCheck.connected ? 'up' : 'down',
+        latency_ms: dbCheck.latencyMs,
+      };
+
+      if (dbCheck.error) {
+        health.checks.database.error = dbCheck.error;
+      }
+
+      if (!dbCheck.connected) {
+        health.status = 'unhealthy';
+        return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+      }
+    } catch (error) {
+      health.status = 'unhealthy';
+      health.checks.database = {
+        status: 'down',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+    }
+
+    res.json(health);
   });
 
   // 404 handler
@@ -113,7 +151,7 @@ export function createApp(): Express {
   });
 
   // Error handler
-  app.use((err: any, req: Request, res: Response, next: Function) => {
+  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     logger.error('[HTTP] Error', {
       error: err.message,
       method: req.method,

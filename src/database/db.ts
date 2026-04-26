@@ -66,11 +66,17 @@ interface PoolWithHealth extends Pool {
 const poolWithHealth = pool as PoolWithHealth;
 poolWithHealth._isHealthy = true;
 
+// Database error interface
+interface DatabaseError extends Error {
+  code?: string;
+}
+
 // Handle pool errors
 pool.on('error', (err: Error, client: PoolClient) => {
+  const dbError = err as DatabaseError;
   logger.error('Unexpected error on idle database client', {
     error: err.message,
-    code: (err as any).code,
+    code: dbError.code,
     stack: err.stack,
   });
   
@@ -101,15 +107,37 @@ pool.on('remove', (client: PoolClient) => {
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, closing database pool');
+/**
+ * Gracefully close the database pool
+ * Should be called during application shutdown
+ */
+export async function closePool(): Promise<void> {
+  logger.info('Closing database pool');
   try {
     await pool.end();
     logger.info('Database pool closed successfully');
-  } catch (error: any) {
-    logger.error('Error closing database pool', { error: error.message });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Error closing database pool', { error: errorMessage });
+    throw error;
   }
-});
+}
+
+/**
+ * Check database connectivity
+ * Used for health checks
+ */
+export async function checkDatabaseConnectivity(): Promise<{ connected: boolean; latencyMs: number; error?: string }> {
+  const startTime = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    const latencyMs = Date.now() - startTime;
+    return { connected: true, latencyMs };
+  } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { connected: false, latencyMs, error: errorMessage };
+  }
+}
 
 export default pool;
