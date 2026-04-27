@@ -1,0 +1,288 @@
+Service,Category,Sub-Category,No of Validation,Test Name,Local Test Status,Integration Test,Role,Type,Priority,Preconditions,Test Steps,Expected Results
+inbound-event-receiver,Validation,Payload Validation (payment_id | amount | reference | description | event_type),5,New Payment Webhook - Success Flow,Passed,Passed,QA Engineer,Functional,High,"Docker containers running, Database clean, Services healthy","1. Generate valid payment webhook payload with unique payment ID
+2. Sign payload with valid webhook secret
+3. Send POST request to /callback/payment endpoint with signature header
+4. Wait for webhook storage (2s)
+5. Wait for payment processor (5s)
+6. Query database for webhook record
+7. Query database for payment record","HTTP 200 response received, Webhook stored in payment_webhooks table with status 'received', Payment created in payments table with correct amount, Payment event created in payment_events table"
+inbound-event-receiver,Validation,Duplicate Detection Validation (webhook_id),3,Duplicate Webhook ID - Rejected,Passed,Passed,QA Engineer,Functional,High,"Docker containers running, First webhook already processed","1. Send first webhook with webhook_id 'evt_test_duplicate_001'
+2. Verify first webhook accepted (HTTP 200)
+3. Send second webhook with same webhook_id 'evt_test_duplicate_001'
+4. Verify second webhook rejected","First webhook: HTTP 200 accepted, Second webhook: HTTP 409 Conflict, Error message indicates duplicate webhook_id, No duplicate payment created in database"
+inbound-event-receiver,Validation,Duplicate Detection Validation (payment_id),4,Duplicate Payment ID - Confirmed Payment,Passed,Passed,QA Engineer,Functional,High,"Docker containers running, First payment already confirmed","1. Send first webhook with payment_id 'pay_test_duplicate_002'
+2. Wait for payment creation (5s)
+3. Update payment status to 'confirmed' in database
+4. Send second webhook with same payment_id but different webhook_id
+5. Verify second webhook accepted but no duplicate payment","First webhook: HTTP 200, Payment created and confirmed, Second webhook: HTTP 200 accepted, No duplicate payment in database, Only one payment with given payment_id exists"
+inbound-event-receiver,Validation,Signature Validation (Pay-Signature header),3,Invalid Signature - Rejected,Passed,Passed,Security Tester,Security,Critical,"Docker containers running, Valid webhook secret configured","1. Generate valid payment webhook payload
+2. Sign payload with INVALID secret key 'wrong-secret'
+3. Send POST request to /callback/payment with invalid signature
+4. Verify webhook rejected","HTTP 401 Unauthorized response, Error message indicates signature verification failed, No webhook stored in database, No payment created"
+inbound-event-receiver,Validation,Health Check Validation,1,Health Endpoint - Service Available,Passed,Passed,DevOps,Functional,Medium,Inbound receiver service running,"1. Send GET request to /health endpoint
+2. Check response status","HTTP 200 OK response received, Service is healthy and available"
+payment-processor,Validation,SQS Message Processing Validation (payment_id | amount | reference),6,Process Payment from SQS Queue,Passed,Passed,QA Engineer,Functional,High,"LocalStack SQS running, Payment webhook stored in database","1. Webhook successfully stored in database
+2. Message sent to SQS queue
+3. Payment processor polls SQS queue
+4. Processor reads message from queue
+5. Processor creates payment record
+6. Processor creates payment event","Payment created in payments table with correct details, Payment event created with status 'success', SQS message deleted from queue"
+payment-processor,Validation,Database Record Validation (govuk_pay_id | amount | reference | status),4,Create Payment from Webhook Data,Passed,Passed,QA Engineer,Functional,High,"Database connection available, Valid webhook data in database","1. Payment processor receives webhook message
+2. Extracts payment data (amount, reference, description)
+3. Creates payment record in payments table
+4. Creates corresponding payment_event record","Payment record created with: govuk_pay_id, amount=2500, reference, description, status='pending', Payment event record created with event_type and timestamp"
+payment-processor,Validation,Error Handling Validation (malformed data),3,Handle Malformed Payment Data,Not Started,Not Started,QA Engineer,Negative,Medium,"Payment processor running, Invalid data in SQS message","1. Send malformed webhook payload to inbound receiver
+2. Verify webhook rejected OR
+3. If webhook accepted, verify processor handles error gracefully","Invalid webhook rejected at receiver level OR Payment processor logs error and moves message to DLQ, No corrupted payment record created"
+database,Validation,Schema Validation (payment_webhooks | payments | payment_events tables),3,Verify Payment Schema,Passed,Passed,QA Engineer,Functional,High,Database initialized with schema,"1. Connect to PostgreSQL database
+2. Query payment_webhooks table structure
+3. Query payments table structure
+4. Query payment_events table structure
+5. Verify foreign key relationships","payment_webhooks table exists with required columns, payments table exists with required columns, payment_events table exists with required columns, Foreign keys properly configured"
+database,Validation,Data Integrity Validation (foreign key relationships),4,Payment Event References Payment,Passed,Passed,QA Engineer,Functional,Medium,"Payment created in database, Payment event created","1. Create payment record
+2. Create payment_event record referencing payment
+3. Query both tables with JOIN
+4. Attempt to delete payment with existing event","Payment and event properly linked, JOIN query returns both records, Delete attempt fails due to foreign key constraint (if configured) OR Events have valid payment_id reference"
+integration,Validation,End-to-End Flow Validation (webhook → SQS → database),7,Full Payment Webhook Flow,Passed,Passed,QA Engineer,Integration,Critical,"All services running (inbound receiver, LocalStack, payment processor, PostgreSQL)","1. Generate unique payment webhook payload
+2. Sign with valid secret
+3. POST to /callback/payment endpoint
+4. Wait for webhook storage (2s)
+5. Wait for SQS processing (5s)
+6. Verify webhook stored
+7. Verify payment created
+8. Verify payment event created","HTTP 200 response from inbound receiver, Webhook record in payment_webhooks table with status 'received', Payment record in payments table with correct amount and reference, Payment event in payment_events table with timestamp, End-to-end processing completes within 10 seconds"
+integration,Validation,Concurrency Validation (multiple webhooks),6,Multiple Concurrent Webhooks,Not Started,Not Started,QA Engineer,Performance,Medium,"All services running, Database clean","1. Generate 10 unique payment webhooks
+2. Send all 10 webhooks concurrently
+3. Wait for all processing to complete
+4. Verify all 10 webhooks stored
+5. Verify all 10 payments created
+6. Check for any data corruption or race conditions","All 10 webhooks receive HTTP 200 response, All 10 webhook records created in database, All 10 payment records created without duplication, No data corruption or inconsistencies, Processing completes within 30 seconds"
+docker,Validation,Infrastructure Health Validation (postgres | localstack | inbound-receiver | payment-processor),4,All Containers Healthy,Passed,Passed,DevOps,Infrastructure,High,Docker Compose file configured,"1. Run docker-compose up -d --build
+2. Wait for containers to start
+3. Check postgres container health
+4. Check localstack container health
+5. Check inbound-receiver container health
+6. Check payment-processor container health","All containers start successfully, postgres healthy within 20s, localstack healthy within 35s, inbound-receiver responds to health check, payment-processor polls SQS queue, Docker network configured correctly"
+docker,Validation,Data Persistence Validation (volume | payment records),4,Database Data Persistence,Passed,Passed,DevOps,Infrastructure,Medium,"Docker volume configured, Database initialized","1. Create payment record in database
+2. Stop all containers (docker-compose down)
+3. Start containers again (docker-compose up -d)
+4. Query database for previous payment record","Payment record persists after container restart, Volume data retained, No data loss on container stop/start"
+localstack,Validation,AWS Service Emulation Validation (SQS queue operations),5,SQS Queue Creation and Operations,Passed,Passed,DevOps,Infrastructure,High,LocalStack container running,"1. Check LocalStack health endpoint
+2. Verify SQS queue exists (payment-webhook-queue)
+3. Send test message to queue
+4. Receive message from queue
+5. Delete message from queue","LocalStack healthy and running, SQS queue accessible at localhost:4566, Messages can be sent to queue, Messages can be received from queue, Messages can be deleted after processing"
+govuk-notify-processor,Validation,Email Processing Validation (template_id | email_address | notification_id),6,Process Email Request from SQS,Not Started,Not Started,QA Engineer,Functional,High,"Lambda function deployed, GOV.UK Notify API key configured, SQS queue with email request","1. Publish email request to SQS queue with template_id and email_address
+2. Lambda triggered by SQS event
+3. Lambda reads Notify API key from Secrets Manager
+4. Lambda calls GOV.UK Notify API
+5. Lambda updates notify_email_requests table with notification_id
+6. Lambda marks request as 'sent'","Email sent via GOV.UK Notify API, Database record updated with notification_id, Status changed to 'sent', sent_at timestamp recorded, SQS message deleted"
+govuk-notify-processor,Validation,Retry Logic Validation (retry_count | status),6,Retry Failed Email Send,Not Started,Not Started,QA Engineer,Functional,Medium,"Email request failed initially, retry_count < max_retries","1. Email send fails (API error 500)
+2. Lambda returns batch failure to SQS
+3. SQS redelivers message after visibility timeout
+4. Lambda increments retry_count
+5. Lambda attempts send again
+6. On success, updates status to 'sent'","First attempt fails and logged, Message returned to SQS queue, retry_count incremented in database, Second attempt succeeds, Status updated to 'sent', Email successfully delivered"
+govuk-notify-processor,Validation,Dead Letter Queue Validation (max_retries | error_message),5,Move Permanently Failed Email to DLQ,Not Started,Not Started,QA Engineer,Negative,Medium,"Email request failed max_retries times, DLQ configured","1. Email send fails 3 times (invalid template_id)
+2. retry_count reaches max_retries
+3. SQS moves message to Dead Letter Queue
+4. Lambda updates status to 'failed'
+5. Error message recorded in database","Message moved to DLQ after max retries, Database record status = 'failed', error_message populated with failure reason, failed_at timestamp recorded, No further retry attempts"
+security,Validation,Authentication Validation (Pay-Signature header | webhook secret),5,Webhook Secret Validation,Passed,Passed,Security Tester,Security,Critical,"Webhook secret configured in environment","1. Send webhook with no signature header
+2. Send webhook with empty signature
+3. Send webhook with invalid signature format
+4. Send webhook with signature from wrong secret
+5. Send webhook with correct signature","All invalid signatures rejected with HTTP 401, Correct signature accepted with HTTP 200, No webhooks stored for invalid signatures, Security headers properly validated"
+security,Validation,Data Protection Validation (API keys | secrets | PII),4,No Sensitive Data in Logs,Not Started,Not Started,Security Tester,Security,High,"Logging configured, Test payment processed","1. Process payment webhook with test data
+2. Review application logs
+3. Check for exposed secrets, API keys, or PII
+4. Verify sensitive data is masked or excluded","No API keys logged, No webhook secrets in logs, Payment details logged without sensitive info, PII properly masked or excluded, Logs contain only necessary debug information"
+performance,Validation,Load Testing Validation (response time | throughput | connection pool),6,100 Webhooks in 1 Minute,Not Started,Not Started,Performance Tester,Performance,Low,"All services running, Load testing tool configured","1. Generate 100 unique payment webhooks
+2. Send webhooks at rate of ~1.7/second
+3. Monitor service response times
+4. Monitor database connection pool
+5. Monitor SQS queue depth
+6. Verify all webhooks processed","All 100 webhooks accepted (HTTP 200), All payments created in database, No timeouts or connection errors, Average response time < 500ms, 95th percentile response time < 1000ms, No database connection pool exhaustion"
+monitoring,Validation,Logging Validation (log structure | correlation IDs | log levels),4,Structured Logging for Debugging,Not Started,Not Started,DevOps,Functional,Low,"Services running, Logging configured","1. Process successful payment webhook
+2. Process failed webhook (invalid signature)
+3. Review logs for both scenarios
+4. Verify log structure and content","Successful webhook: Info logs with payment_id, webhook_id, timestamps, Failed webhook: Error logs with failure reason, Both scenarios: Structured JSON logs with correlation IDs, Log levels appropriate (INFO/ERROR/DEBUG)"
+monitoring,Validation,Metrics Publishing Validation (webhook count | processing duration | error count),5,Publish Metrics to CloudWatch,Not Started,Not Started,DevOps,Monitoring,Low,"CloudWatch configured (or LocalStack mock), Metrics enabled","1. Process payment webhook
+2. Check CloudWatch for published metrics
+3. Verify metric dimensions and values","Webhook received count incremented, Payment processed count incremented, Processing duration metric recorded, Error count metrics (if failures), Metrics properly tagged with dimensions"
+inbound-event-receiver,Validation,Missing Field Validation (payment_id),2,Missing Payment ID in Webhook,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Generate webhook payload WITHOUT payment_id field
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates missing required field 'payment_id', No webhook stored in database, No payment created"
+inbound-event-receiver,Validation,Missing Field Validation (amount),2,Missing Amount in Webhook,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Generate webhook payload WITHOUT amount field
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates missing required field 'amount', No webhook stored in database, No payment created"
+inbound-event-receiver,Validation,Missing Field Validation (event_type),2,Missing Event Type in Webhook,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Generate webhook payload WITHOUT event_type field
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates missing required field 'event_type', No webhook stored in database"
+inbound-event-receiver,Validation,Invalid Data Type Validation (amount),3,Invalid Amount Data Type - String instead of Number,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with amount = 'twenty-five-pounds' (string)
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates invalid data type for amount field, No webhook stored, No payment created"
+inbound-event-receiver,Validation,Invalid Data Type Validation (payment_id),3,Invalid Payment ID Data Type - Number instead of String,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with payment_id = 12345 (number)
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates invalid data type for payment_id field, No webhook stored"
+inbound-event-receiver,Validation,Boundary Value Validation (amount),3,Zero Amount Value,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with amount = 0
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates amount must be greater than zero, No payment created"
+inbound-event-receiver,Validation,Boundary Value Validation (amount),3,Negative Amount Value,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Generate webhook with amount = -5000
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates amount cannot be negative, No payment created"
+inbound-event-receiver,Validation,Boundary Value Validation (amount),3,Maximum Amount Value - 10 Million,Not Started,Not Started,QA Engineer,Positive,Low,Inbound receiver service running,"1. Generate webhook with amount = 10000000 (£100,000.00)
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint
+4. Wait for processing","HTTP 200 OK response, Webhook stored, Payment created with amount = 10000000, No errors processing large amount"
+inbound-event-receiver,Validation,Null Value Validation (reference),3,Null Reference Field,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with reference = null
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates reference cannot be null, No payment created"
+inbound-event-receiver,Validation,Empty String Validation (reference),3,Empty Reference Field,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with reference = '' (empty string)
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates reference cannot be empty, No payment created"
+inbound-event-receiver,Validation,Special Characters Validation (reference | description),4,Special Characters in Reference and Description,Not Started,Not Started,QA Engineer,Positive,Medium,Inbound receiver service running,"1. Generate webhook with reference = 'PAY-2024-£$@#&*()' and description = 'Test <script>alert()</script> UTF-8: émojis 🎉'
+2. Sign payload with valid secret
+3. Send POST request
+4. Wait for processing","HTTP 200 OK response, Special characters properly escaped/sanitized, Payment created with sanitized reference and description, No XSS or injection vulnerabilities"
+inbound-event-receiver,Validation,Character Limit Validation (reference),3,Reference Field Exceeds Max Length,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with reference = 500-character string
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates reference exceeds maximum length, No payment created"
+inbound-event-receiver,Validation,Character Limit Validation (description),3,Description Field Exceeds Max Length,Not Started,Not Started,QA Engineer,Negative,Low,Inbound receiver service running,"1. Generate webhook with description = 2000-character string
+2. Sign payload with valid secret
+3. Send POST request to /callback/payment endpoint","HTTP 400 Bad Request response, Error message indicates description exceeds maximum length, No payment created"
+inbound-event-receiver,Validation,Malformed JSON Validation,2,Malformed JSON Payload,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Send POST request with malformed JSON: {payment_id: 'pay123', amount: 2500 (missing closing brace)
+2. Include valid signature header","HTTP 400 Bad Request response, Error message indicates JSON parse error, No webhook stored"
+inbound-event-receiver,Validation,Empty Payload Validation,2,Empty Request Body,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Send POST request with empty body ''
+2. Include signature header","HTTP 400 Bad Request response, Error message indicates empty request body, No webhook stored"
+inbound-event-receiver,Validation,Missing Header Validation (Content-Type),2,Missing Content-Type Header,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate valid webhook payload
+2. Sign payload
+3. Send POST request WITHOUT Content-Type header","HTTP 400 Bad Request response, Error message indicates missing Content-Type header, Request rejected"
+inbound-event-receiver,Validation,Missing Header Validation (X-Webhook-Id),2,Missing X-Webhook-Id Header,Not Started,Not Started,QA Engineer,Negative,High,Inbound receiver service running,"1. Generate valid webhook payload
+2. Sign payload with valid secret
+3. Send POST request WITHOUT X-Webhook-Id header","HTTP 400 Bad Request response, Error message indicates missing webhook ID header, No webhook stored"
+inbound-event-receiver,Validation,Invalid Event Type Validation,3,Unsupported Event Type,Not Started,Not Started,QA Engineer,Negative,Medium,Inbound receiver service running,"1. Generate webhook with event_type = 'refund_initiated' (unsupported)
+2. Sign payload with valid secret
+3. Send POST request","HTTP 400 Bad Request response OR ignored gracefully, Error message indicates unsupported event type, No payment processing attempted"
+inbound-event-receiver,Validation,Network Error Validation (database timeout),4,Database Connection Timeout,Not Started,Not Started,QA Engineer,Negative,High,"Inbound receiver running, Simulate database unavailability","1. Stop PostgreSQL container
+2. Send valid webhook to inbound receiver
+3. Observe error handling
+4. Restart PostgreSQL","HTTP 503 Service Unavailable OR 500 Internal Server Error, Error logged with database connection failure, Webhook retry mechanism triggered OR graceful failure, No corrupted data"
+inbound-event-receiver,Validation,Network Error Validation (SQS unavailable),4,SQS Queue Unavailable,Not Started,Not Started,QA Engineer,Negative,High,"Inbound receiver running, Simulate SQS unavailability","1. Stop LocalStack container (SQS unavailable)
+2. Send valid webhook to inbound receiver
+3. Observe error handling
+4. Restart LocalStack","HTTP 503 Service Unavailable, Error logged with SQS connection failure, Webhook stored in database for retry, Retry mechanism processes webhook when SQS available"
+inbound-event-receiver,Validation,Timeout Validation (slow processing),4,Request Timeout - Slow Processing,Not Started,Not Started,QA Engineer,Negative,Medium,"Inbound receiver running, Simulate slow processing","1. Send webhook that triggers slow database query
+2. Wait for request timeout threshold
+3. Verify timeout handling","HTTP 504 Gateway Timeout OR request times out gracefully, Error logged with timeout details, No partial data committed, Transaction rolled back"
+inbound-event-receiver,Validation,UTF-8 Encoding Validation (description),4,UTF-8 Characters in Description Field,Not Started,Not Started,QA Engineer,Positive,Low,Inbound receiver service running,"1. Generate webhook with description containing UTF-8: 'Payment from José für café ₹₹₹ 中文 العربية'
+2. Sign payload
+3. Send POST request
+4. Query database","HTTP 200 OK response, UTF-8 characters stored correctly in database, Payment created with proper encoding, Description retrieved without corruption"
+inbound-event-receiver,Validation,Emoji Validation (description),4,Emoji Characters in Description,Not Started,Not Started,QA Engineer,Positive,Low,Inbound receiver service running,"1. Generate webhook with description = 'Payment complete! 🎉💰✅🚀'
+2. Sign payload
+3. Send POST request
+4. Query database","HTTP 200 OK response, Emojis stored correctly in database, Payment created with proper emoji encoding, Description retrieved without corruption"
+payment-processor,Validation,Out-of-Order Webhook Validation,5,Webhooks Arrive Out of Order,Not Started,Not Started,QA Engineer,Negative,High,"All services running, Multiple webhook events for same payment","1. Send 'payment_created' webhook for pay_123
+2. Send 'payment_confirmed' webhook for pay_123 BEFORE first is processed
+3. Wait for processing
+4. Verify correct order handling","Processor handles out-of-order events correctly, Final payment status reflects actual sequence, No data corruption, Event timestamps used for ordering"
+payment-processor,Validation,Race Condition Validation (concurrent webhooks),5,Concurrent Webhooks for Same Payment,Not Started,Not Started,QA Engineer,Negative,High,"All services running, Database clean","1. Send two identical webhooks for pay_456 simultaneously
+2. Both webhooks have same payment_id but different webhook_ids
+3. Wait for processing
+4. Verify only one payment created","Only ONE payment record created, One webhook succeeds, other detects duplicate, No race condition in database, Proper locking mechanism prevents duplicates"
+payment-processor,Validation,Database Transaction Validation (rollback),4,Database Transaction Rollback on Error,Not Started,Not Started,QA Engineer,Negative,Medium,"Payment processor running, Simulate database error mid-transaction","1. Send valid webhook
+2. Simulate database error during payment_event insertion
+3. Verify transaction rollback
+4. Check database state","Payment record NOT created (or rolled back), No orphaned records in database, Error logged with transaction failure, Webhook remains in retry queue"
+payment-processor,Validation,Missing Field Validation (SQS message),3,Malformed SQS Message - Missing Fields,Not Started,Not Started,QA Engineer,Negative,High,"Payment processor running, LocalStack SQS available","1. Manually publish malformed message to SQS queue (missing payment_id)
+2. Wait for processor to consume message
+3. Verify error handling","Processor logs error with malformed message details, Message moved to Dead Letter Queue, No corrupted payment record created, No processor crash"
+payment-processor,Validation,Large Payload Validation,4,Process Large Payment Webhook Payload,Not Started,Not Started,QA Engineer,Positive,Low,"All services running, Database clean","1. Generate webhook with maximum size payload (large description, many custom fields)
+2. Send webhook (payload ~100KB)
+3. Wait for processing
+4. Verify storage","HTTP 200 OK response, Large payload stored correctly, Payment created with all fields, No truncation or data loss, Processing time within acceptable limits"
+payment-processor,Validation,Concurrent Processing Validation,6,Process Multiple Different Payments Concurrently,Not Started,Not Started,QA Engineer,Positive,Medium,"All services running, Database clean","1. Send 5 webhooks for different payments simultaneously
+2. All webhooks have unique payment_ids
+3. Wait for all processing
+4. Verify all payments created","All 5 webhooks return HTTP 200, All 5 payments created in database, No data corruption or mixing, Concurrent processing successful, No deadlocks"
+payment-processor,Validation,Retry Logic Validation (transient failure),5,Retry Failed Payment Processing - Transient Error,Not Started,Not Started,QA Engineer,Positive,Medium,"Payment processor running, Simulate transient error","1. Send valid webhook
+2. Simulate database connection failure on first attempt
+3. Processor retries after delay
+4. Database becomes available
+5. Verify successful retry","First attempt fails with transient error, Webhook remains in retry queue, Second attempt succeeds, Payment created successfully, Retry count logged"
+payment-processor,Validation,DLQ Validation (permanent failure),4,Move to DLQ After Max Retries,Not Started,Not Started,QA Engineer,Negative,Medium,"Payment processor running, Configure max_retries = 3","1. Send webhook with invalid data that always fails
+2. Processor attempts 3 times
+3. All attempts fail
+4. Verify DLQ movement","Processor attempts exactly 3 times, All failures logged, Message moved to Dead Letter Queue after max retries, Original message preserved in DLQ for investigation"
+database,Validation,Connection Pool Validation (exhaustion),5,Database Connection Pool Exhaustion,Not Started,Not Started,QA Engineer,Negative,Medium,"All services running, Database connection pool configured","1. Send 50 concurrent webhooks (exceeds pool size)
+2. Monitor database connections
+3. Verify connection pool handling
+4. Check for timeouts","All webhooks queued for processing, Connection pool managed correctly, No connection leaks, Requests wait for available connections, All webhooks eventually processed OR some timeout gracefully"
+database,Validation,Deadlock Validation,5,Database Deadlock Handling,Not Started,Not Started,QA Engineer,Negative,Low,"All services running, Simulate deadlock scenario","1. Send two webhooks that update same payment record simultaneously
+2. Trigger deadlock condition
+3. Verify deadlock detection and resolution","Database detects deadlock, One transaction succeeds, other rolls back, Rolled back transaction retried, Eventually both transactions complete OR error handled gracefully, No data corruption"
+database,Validation,Unique Constraint Validation (payment_id),3,Duplicate Payment ID - Database Constraint,Not Started,Not Started,QA Engineer,Negative,High,"Payment processor running, Payment already exists in database","1. Create payment record manually: pay_789
+2. Send webhook with same payment_id = pay_789
+3. Verify database constraint enforcement","Database unique constraint violation, Error logged with duplicate key details, No duplicate payment created, Processor handles constraint error gracefully"
+database,Validation,Foreign Key Constraint Validation,4,Invalid Foreign Key Reference,Not Started,Not Started,QA Engineer,Negative,Medium,"Database initialized, Payment processor running","1. Manually insert payment_event with non-existent payment_id
+2. Verify foreign key constraint enforcement
+3. Check error handling","Database rejects insert with foreign key violation, Error logged, No orphaned payment_event created, Data integrity maintained"
+integration,Validation,End-to-End Error Flow Validation,6,Failed Payment Webhook Flow,Not Started,Not Started,QA Engineer,Negative,High,"All services running, Database clean","1. Generate webhook for failed payment (status='failed')
+2. Sign with valid secret
+3. Send POST request
+4. Wait for processing
+5. Verify failure recorded","HTTP 200 OK response, Webhook stored, Payment created with status='failed', Payment event records failure, No further processing attempted for failed payment"
+integration,Validation,End-to-End Cancelled Flow Validation,6,Cancelled Payment Webhook Flow,Not Started,Not Started,QA Engineer,Positive,Medium,"All services running, Database clean","1. Generate webhook for cancelled payment (status='cancelled')
+2. Sign with valid secret
+3. Send POST request
+4. Wait for processing
+5. Verify cancellation recorded","HTTP 200 OK response, Webhook stored, Payment created with status='cancelled', Payment event records cancellation, System handles cancelled payments correctly"
+integration,Validation,Webhook Ordering Validation,7,Process Multiple Webhook Events in Correct Order,Not Started,Not Started,QA Engineer,Positive,High,"All services running, Database clean","1. Send 'payment_created' webhook for pay_999
+2. Wait 2s
+3. Send 'payment_confirmed' webhook for pay_999
+4. Wait 2s
+5. Send 'payment_settled' webhook for pay_999
+6. Verify order","All webhooks processed in correct sequence, Payment status updated through lifecycle: created → confirmed → settled, Event timestamps reflect order, Final status = 'settled'"
+integration,Validation,Idempotency Validation,5,Multiple Identical Webhooks - Idempotent Processing,Not Started,Not Started,QA Engineer,Positive,High,"All services running, Database clean","1. Send webhook for pay_111 with webhook_id evt_111
+2. Wait for processing
+3. Send EXACT same webhook (same webhook_id evt_111)
+4. Verify idempotency","First webhook: HTTP 200, payment created, Second webhook: HTTP 200 OR 409, payment NOT duplicated, Idempotency key (webhook_id) prevents duplicate processing, Database has exactly ONE payment record"
+integration,Validation,Partial Failure Validation,6,Partial System Failure - Webhook Stored But Not Processed,Not Started,Not Started,QA Engineer,Negative,Medium,"Inbound receiver running, Payment processor stopped","1. Stop payment processor container
+2. Send valid webhook to inbound receiver
+3. Verify webhook stored
+4. Start payment processor
+5. Verify delayed processing","Webhook accepted by receiver (HTTP 200), Webhook stored in database, Payment NOT created immediately (processor down), When processor starts, webhook processed from database, Payment eventually created"
+security,Validation,SQL Injection Validation,4,SQL Injection in Reference Field,Not Started,Not Started,Security Tester,Negative,Critical,Inbound receiver service running,"1. Generate webhook with reference = ""'; DROP TABLE payments; --""
+2. Sign payload
+3. Send POST request
+4. Query database tables","HTTP 400 Bad Request OR HTTP 200 with sanitized input, SQL injection prevented, Database tables intact, Parameterized queries protect against injection, Reference stored as string (not executed)"
+security,Validation,XSS Validation,4,Cross-Site Scripting in Description,Not Started,Not Started,Security Tester,Negative,Critical,Inbound receiver service running,"1. Generate webhook with description = '<script>alert(""XSS"")</script>'
+2. Sign payload
+3. Send POST request
+4. Retrieve payment record","HTTP 200 OK response, XSS payload sanitized/escaped, Script tags not executable when retrieved, Stored safely in database, No XSS vulnerability"
+security,Validation,HMAC Timing Attack Validation,4,Signature Verification - Timing Attack Protection,Not Started,Not Started,Security Tester,Negative,Critical,Inbound receiver service running,"1. Send 100 webhooks with invalid signatures
+2. Measure response times
+3. Analyze timing consistency
+4. Verify constant-time comparison","All invalid signatures rejected, Response times consistent (no timing leak), Constant-time comparison used for HMAC verification, Timing attack prevented"
+security,Validation,Replay Attack Validation,5,Replay Old Webhook - Timestamp Validation,Not Started,Not Started,Security Tester,Negative,High,Inbound receiver service running,"1. Generate webhook with created_date = 7 days ago
+2. Sign with valid secret
+3. Send POST request
+4. Verify timestamp validation","HTTP 401 Unauthorized OR 400 Bad Request, Error indicates webhook timestamp too old, Webhook rejected (expired), Replay attack prevented, Acceptable time window enforced (e.g., 5 minutes)"
+security,Validation,Rate Limiting Validation,5,Excessive Requests - Rate Limiting,Not Started,Not Started,Security Tester,Negative,Medium,Inbound receiver service running,"1. Send 100 webhooks from same IP in 1 second
+2. Verify rate limiting applied
+3. Check rate limit headers
+4. Wait for rate limit reset","First N requests accepted (within rate limit), Subsequent requests: HTTP 429 Too Many Requests, Rate limit headers present (X-RateLimit-Remaining, Retry-After), Rate limit resets after time window, Prevents DoS attacks"
+performance,Validation,Memory Leak Validation,6,Long-Running Process - Memory Stability,Not Started,Not Started,Performance Tester,Negative,Low,"All services running, Monitoring tools available","1. Send 1000 webhooks over 1 hour
+2. Monitor memory usage of all services
+3. Check for memory leaks
+4. Verify memory stability","Memory usage stable (no continuous growth), Garbage collection working properly, No memory leaks detected, All services remain responsive, Memory returns to baseline after processing"
+performance,Validation,Latency Validation (p95),5,Response Time P95 Under Load,Not Started,Not Started,Performance Tester,Positive,Medium,"All services running, Load testing tool configured","1. Send 500 webhooks at steady rate (10/second)
+2. Measure response times
+3. Calculate p95 latency
+4. Verify SLA compliance","All webhooks processed successfully, P95 latency < 1000ms, P50 latency < 500ms, No timeouts, System meets performance SLA"
+performance,Validation,Throughput Validation,5,Maximum Throughput - Sustained Load,Not Started,Not Started,Performance Tester,Positive,Low,"All services running, Load testing tool configured","1. Gradually increase webhook rate: 1/sec → 10/sec → 50/sec
+2. Identify maximum sustainable throughput
+3. Monitor error rates
+4. Verify graceful degradation","Maximum throughput identified (e.g., 30 webhooks/second), Error rate < 1% at max throughput, System degrades gracefully under overload (returns 503, not crash), All services remain available"
