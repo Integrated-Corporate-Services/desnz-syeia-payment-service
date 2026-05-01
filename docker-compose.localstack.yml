@@ -57,11 +57,12 @@ services:
       HOST: "0.0.0.0"
       LOG_LEVEL: debug
 
-      DB_HOST: desnz-syeia-appdb
+      DB_HOST: host.docker.internal
       DB_PORT: 5432
       DB_NAME: appdb
       DB_USER: postgres
       DB_PASSWORD: postgres
+      PGSSLMODE: disable
 
       AWS_REGION: eu-west-2
       AWS_ENDPOINT: http://ministack:4566
@@ -77,8 +78,6 @@ services:
       DETAILED_LOGGING: "true"
 
     depends_on:
-      desnz-syeia-appdb:
-        condition: service_healthy
       ministack:
         condition: service_healthy
     healthcheck:
@@ -111,7 +110,7 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       AWS_ENDPOINT_URL: http://ministack:4566
 
-      PGHOST: desnz-syeia-appdb
+      PGHOST: host.docker.internal
       PGPORT: "5432"
       PGDATABASE: appdb
       PGUSER: postgres
@@ -121,11 +120,12 @@ services:
       ECS_CLUSTER_ARN: arn:aws:ecs:eu-west-2:000000000000:cluster/local
       ECS_WEBHOOK_TASK_DEFINITION: arn:aws:ecs:eu-west-2:000000000000:task-definition/local:1
 
-      DB_HOST: desnz-syeia-appdb
+      DB_HOST: host.docker.internal
       DB_PORT: "5432"
       DB_NAME: appdb
       DB_USER: postgres
       DB_PASSWORD: postgres
+      PGSSLMODE: disable
       SQS_QUEUE_URL: http://ministack:4566/000000000000/payment-webhook-queue
     restart: "no"
     networks:
