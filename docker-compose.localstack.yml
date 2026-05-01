@@ -1,25 +1,142 @@
-# LocalStack Configuration for Local AWS Testing
-# This allows you to test SQS integration without real AWS credentials
-
-version: '3.8'
-
 services:
-  localstack:
-    image: localstack/localstack:latest
-    container_name: localstack-sqs
+
+  desnz-syeia-appdb:
+    image: postgres:15-alpine
+    container_name: desnz-syeia-appdb
     ports:
-      - "4566:4566"            # LocalStack gateway
-      - "4510-4559:4510-4559"  # External services port range
+      - "5434:5432"
     environment:
-      - SERVICES=sqs            # Only enable SQS service
-      - DEBUG=1
-      - DATA_DIR=/tmp/localstack/data
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - DEFAULT_REGION=eu-west-2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb
     volumes:
-      - "./localstack-init:/etc/localstack/init/ready.d"  # Init scripts
-      - localstack-data:/tmp/localstack
-      - "/var/run/docker.sock:/var/run/docker.sock"
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - desnz-syeia-network
+
+  ministack:
+    image: ministackorg/ministack:latest
+    container_name: ministack
+    ports:
+      - "4566:4566"
+    environment:
+      MINISTACK_REGION: eu-west-2
+      MINISTACK_ACCOUNT_ID: "000000000000"
+      LOG_LEVEL: INFO
+      LAMBDA_EXECUTOR: docker
+      DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-desnz-syeia}_desnz-syeia-network
+      LAMBDA_REMOTE_DOCKER_VOLUME_MOUNT: ${COMPOSE_PROJECT_NAME:-desnz-syeia}_lambda-docker-volume
+    volumes:
+      - ./localstack-init:/etc/localstack/init/ready.d
+      - /var/run/docker.sock:/var/run/docker.sock
+      - lambda-docker-volume:/var/task
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4566/_ministack/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - desnz-syeia-network
+
+  desnz-syeia-inbound-receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: desnz-syeia-inbound-receiver
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: local
+      PORT: 3001
+      HOST: "0.0.0.0"
+      LOG_LEVEL: debug
+
+      DB_HOST: desnz-syeia-appdb
+      DB_PORT: 5432
+      DB_NAME: appdb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+      AWS_REGION: eu-west-2
+      AWS_ENDPOINT: http://ministack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      PAYMENT_WEBHOOK_QUEUE_URL: http://ministack:4566/000000000000/payment-webhook-queue
+      SQS_ENABLED: "true"
+
+      GOVPAY_WEBHOOK_SIGNING_KEY: dev-signing-key-change-in-production
+      GOVPAY_API_KEY: dev-api-key-change-in-production
+
+      SIGNATURE_VERIFICATION_ENABLED: "false"
+      DETAILED_LOGGING: "true"
+
+    depends_on:
+      desnz-syeia-appdb:
+        condition: service_healthy
+      ministack:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3001/health',(r)=>{process.exit(r.statusCode===200?0:1)})"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - desnz-syeia-network
+
+  desnz-syeia-lambda-register:
+    build:
+      context: .
+      dockerfile: localstack-init/Dockerfile
+    container_name: desnz-syeia-lambda-register
+    volumes:
+      - ../lambdas/pay-callback-reconciler:/lambda-src/reconciler:ro
+      - ../lambdas/pay-callback-relay:/lambda-src/relay:ro
+    depends_on:
+      ministack:
+        condition: service_healthy
+    environment:
+      AWS_DEFAULT_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://ministack:4566
+
+      PGHOST: desnz-syeia-appdb
+      PGPORT: "5432"
+      PGDATABASE: appdb
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      WEBHOOK_SQS_QUEUE_URL: http://ministack:4566/000000000000/payment-webhook-queue
+      GOVUK_PAY_WEBHOOK_SECRET: dev-signing-key-change-in-production
+      ECS_CLUSTER_ARN: arn:aws:ecs:eu-west-2:000000000000:cluster/local
+      ECS_WEBHOOK_TASK_DEFINITION: arn:aws:ecs:eu-west-2:000000000000:task-definition/local:1
+
+      DB_HOST: desnz-syeia-appdb
+      DB_PORT: "5432"
+      DB_NAME: appdb
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SQS_QUEUE_URL: http://ministack:4566/000000000000/payment-webhook-queue
+    restart: "no"
+    networks:
+      - desnz-syeia-network
 
 volumes:
-  localstack-data:
+  postgres-data:
+    driver: local
+  lambda-docker-volume:
+    driver: local
+
+networks:
+  desnz-syeia-network:
+    driver: bridge

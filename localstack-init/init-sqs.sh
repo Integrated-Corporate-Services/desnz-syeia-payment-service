@@ -1,28 +1,47 @@
 #!/bin/bash
+set -e
 
-# LocalStack initialization script
-# This runs when LocalStack container starts
-# Creates SQS queue fosh    r local testing
+echo "[init-sqs] Creating SQS resources in MiniStack..."
 
-echo "🚀 Initializing LocalStack SQS..."
+QUEUE_NAME="payment-webhook-queue"
+REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
+ENDPOINT="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 
-# Wait for LocalStack to be ready
-sleep 2
-
-# Create SQS queue for payment webhooks
-awslocal sqs create-queue \
-  --queue-name payment-webhook-queue \
-  --region eu-west-2
-
-echo "✅ SQS queue created: payment-webhook-queue"
-
-# Get queue URL
-QUEUE_URL=$(awslocal sqs get-queue-url --queue-name payment-webhook-queue --region eu-west-2 --output text)
-echo "📋 Queue URL: $QUEUE_URL"
-
-# Set queue attributes (optional)
-awslocal sqs set-queue-attributes \
-  --queue-url $QUEUE_URL \
+aws sqs create-queue \
+  --queue-name "${QUEUE_NAME}" \
+  --region "${REGION}" \
+  --endpoint-url "${ENDPOINT}" \
   --attributes VisibilityTimeout=30,MessageRetentionPeriod=345600
 
-echo "✅ LocalStack SQS initialization complete!"
+QUEUE_URL=$(aws sqs get-queue-url \
+  --queue-name "${QUEUE_NAME}" \
+  --region "${REGION}" \
+  --endpoint-url "${ENDPOINT}" \
+  --output text)
+
+echo "[init-sqs] Queue created: ${QUEUE_URL}"
+
+DLQ_NAME="payment-webhook-queue-dlq"
+
+aws sqs create-queue \
+  --queue-name "${DLQ_NAME}" \
+  --region "${REGION}" \
+  --endpoint-url "${ENDPOINT}" \
+  --attributes MessageRetentionPeriod=1209600
+
+DLQ_ARN=$(aws sqs get-queue-attributes \
+  --queue-url "$(aws sqs get-queue-url --queue-name "${DLQ_NAME}" --region "${REGION}" --endpoint-url "${ENDPOINT}" --output text)" \
+  --attribute-names QueueArn \
+  --region "${REGION}" \
+  --endpoint-url "${ENDPOINT}" \
+  --query 'Attributes.QueueArn' \
+  --output text)
+
+aws sqs set-queue-attributes \
+  --queue-url "${QUEUE_URL}" \
+  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"3\\\"}\"}" \
+  --region "${REGION}" \
+  --endpoint-url "${ENDPOINT}"
+
+echo "[init-sqs] DLQ created and attached: ${DLQ_ARN}"
+echo "[init-sqs] MiniStack SQS initialisation complete"
