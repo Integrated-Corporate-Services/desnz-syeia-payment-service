@@ -1,17 +1,14 @@
 // Payment Webhook Service
-// Handles webhook processing with deduplication, retries, and dead-letter queue
+// Simplified webhook storage per new architecture
+// This service only stores webhooks to database with enqueued_at = NULL
+// The pay-callback-relay Lambda will poll and send to SQS
 
 import getLogger from '../utils/loggerHelper';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
-import * as sqsService from './sqsService';
 
 const logger = getLogger(module);
-const { 
-  RETRYABLE_ERROR_CODES, 
-  RETRYABLE_ERROR_KEYWORDS,
-  ERROR_CODES 
-} = require('../constants');
+const { ERROR_CODES } = require('../constants');
 
 interface WebhookProcessingResult {
   success: boolean;
@@ -19,32 +16,26 @@ interface WebhookProcessingResult {
   paymentId: string;
   error?: string;
   errorCode?: string;
-  retryable?: boolean;
 }
 
-function isRetryableError(error: any): boolean {
-  const errorMessage = error?.message || error?.toString() || '';
-  const errorCode = error?.code || '';
-
-  // Check if error code is retryable
-  if (RETRYABLE_ERROR_CODES.includes(errorCode)) {
-    return true;
-  }
-
-  // Check if error message contains any retryable keywords
-  const lowerMessage = errorMessage.toLowerCase();
-  if (RETRYABLE_ERROR_KEYWORDS.some((keyword: string) => lowerMessage.includes(keyword.toLowerCase()))) {
-    return true;
-  }
-
-  return false;
-}
-
+/**
+ * Process webhook - simplified architecture
+ * 1. Store webhook in database with status='pending' and enqueued_at=NULL
+ * 2. Return immediately (no SQS interaction)
+ * 3. pay-callback-relay will poll and send to SQS
+ * 
+ * @param webhookId - Unique webhook identifier from GOV.UK Pay
+ * @param paymentId - Application/payment reference ID
+ * @param event - Webhook event object
+ * @param rawPayload - Raw webhook payload (will be stored as JSONB)
+ * @param correlationId - Correlation ID for tracing
+ * @returns Processing result indicating success/duplicate/error
+ */
 export async function processWebhook(
   webhookId: string,
   paymentId: string,
   event: any,
-  rawPayload: string,
+  rawPayload: any,
   correlationId: string
 ): Promise<WebhookProcessingResult> {
   const startTime = Date.now();
@@ -71,14 +62,16 @@ export async function processWebhook(
   }
 
   try {
-    // Use INSERT ON CONFLICT to prevent race conditions on duplicate webhooks
+    // Store webhook in database with ON CONFLICT for idempotency
+    // enqueued_at will be NULL until pay-callback-relay sends to SQS
     const createResult = await paymentWebhookRepository.createWebhook({
       webhook_id: webhookId,
-      govuk_pay_id: paymentId,
+      payment_id: paymentId,
       event_type: event.event_type || 'unknown',
-      status: 'processing',
-      raw_payload: rawPayload,
-      retry_count: 0,
+      status: 'pending',
+      raw_payload: rawPayload,  // Stored as JSONB
+      created_by: 'inbound-event-receiver',
+      correlation_id: correlationId,
     });
 
     // Check if this was a duplicate (returned by ON CONFLICT)
@@ -97,75 +90,15 @@ export async function processWebhook(
       };
     }
 
-    // Payment status updates are handled asynchronously by Lambda/SQS processing.
-    // No GOV.UK Pay API calls are made in the inbound receiver.
-
-    // Send to SQS for Lambda processing
-    if (config.aws.sqsEnabled && config.aws.sqsQueueUrl) {
-      try {
-        const sqsResult = await sqsService.sendWebhookToSQS({
-          webhookId,
-          paymentId,
-          eventType: event.event_type || 'unknown',
-          payload: event,
-          correlationId,
-        });
-
-        logger.info('[WebhookService] Sent to SQS for Lambda processing', {
-          webhookId,
-          paymentId,
-          messageId: sqsResult.messageId,
-          correlationId,
-        });
-
-        // Lambda will update the final status based on event type
-        // Do NOT update status here to avoid race conditions
-        logger.info('[WebhookService] Webhook queued for Lambda - status will be updated by Lambda', {
-          webhookId,
-          paymentId,
-          sqsMessageId: sqsResult.messageId,
-        });
-
-        // Return immediately after sending to SQS - Lambda will handle additional processing
-        return {
-          success: true,
-          isDuplicate: false,
-          paymentId,
-        };
-      } catch (sqsError: any) {
-        logger.error('[WebhookService] Failed to send to SQS', {
-          webhookId,
-          paymentId,
-          error: sqsError.message,
-          correlationId,
-        });
-
-        // Mark webhook as failed (SQS send failed)
-        await paymentWebhookRepository.updateWebhookStatus(webhookId, 'failed');
-
-        // Still return success - webhook is stored and can be reprocessed
-        logger.warn('[WebhookService] SQS send failed but webhook stored for retry', {
-          webhookId,
-          paymentId,
-          correlationId,
-        });
-
-        return {
-          success: true,
-          isDuplicate: false,
-          paymentId,
-        };
-      }
-    }
-
-    // SQS is disabled - mark webhook as processing (awaiting manual action)
-    logger.info('[WebhookService] SQS disabled - webhook stored for manual processing', {
+    const duration = Date.now() - startTime;
+    logger.info('[WebhookService] Webhook stored successfully', {
       webhookId,
       paymentId,
+      eventType: event.event_type,
+      duration,
       correlationId,
+      note: 'Webhook will be polled by pay-callback-relay',
     });
-
-    await paymentWebhookRepository.updateWebhookStatus(webhookId, 'processing');
 
     return {
       success: true,
@@ -174,63 +107,23 @@ export async function processWebhook(
     };
   } catch (error: any) {
     const errorMessage = error.message || String(error);
-    const retryable = isRetryableError(error);
+    const duration = Date.now() - startTime;
 
-    logger.error('[WebhookService] Error processing webhook', {
+    logger.error('[WebhookService] Error storing webhook', {
       webhookId,
       paymentId,
       error: errorMessage,
       code: error.code,
-      retryable,
+      duration,
       correlationId,
     });
 
-    try {
-      if (retryable && config.features.retryEnabled) {
-        await paymentWebhookRepository.recordRetryableError(
-          webhookId,
-          errorMessage,
-          config.webhook.retryIntervals
-        );
-
-        return {
-          success: false,
-          isDuplicate: false,
-          paymentId,
-          error: errorMessage,
-          errorCode: ERROR_CODES.DATABASE_ERROR,
-          retryable: true,
-        };
-      } else {
-        if (config.features.dlqEnabled) {
-          await paymentWebhookRepository.moveToDeadLetterQueue(webhookId, errorMessage);
-        }
-
-        return {
-          success: false,
-          isDuplicate: false,
-          paymentId,
-          error: errorMessage,
-          errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR,
-          retryable: false,
-        };
-      }
-    } catch (errorHandlingFailed: any) {
-      logger.error('[WebhookService] Error handling failed', {
-        webhookId,
-        paymentId,
-        originalError: errorMessage,
-        handlingError: errorHandlingFailed.message,
-      });
-
-      return {
-        success: false,
-        isDuplicate: false,
-        paymentId,
-        error: 'Failed to process webhook',
-        errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR,
-        retryable: true,
-      };
-    }
+    return {
+      success: false,
+      isDuplicate: false,
+      paymentId,
+      error: errorMessage,
+      errorCode: error.code || ERROR_CODES.DATABASE_ERROR,
+    };
   }
 }

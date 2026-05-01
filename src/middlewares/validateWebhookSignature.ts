@@ -85,12 +85,17 @@ export function parseWebhookEvent(rawBody: Record<string, unknown>): WebhookEven
 
     const { webhook_message_id, api_version, event_type, created_date, resource_id, resource_type, resource } = rawBody;
 
-    if (!webhook_message_id || !event_type || !resource || !resource_id || !resource_type) {
+    // Extract payment_id from resource if resource_id is not at top level
+    const resourceObj = resource as Record<string, unknown>;
+    const extractedResourceId = resource_id || resourceObj?.payment_id;
+
+    // Validate essential fields only (more flexible for different webhook formats)
+    if (!webhook_message_id || !event_type || !resource) {
       logger.warn('[Webhook] Webhook missing required fields', {
         hasWebhookMessageId: !!webhook_message_id,
         hasApiVersion: !!api_version,
         hasEventType: !!event_type,
-        hasResourceId: !!resource_id,
+        hasResourceId: !!extractedResourceId,
         hasResourceType: !!resource_type,
         hasResource: !!resource,
       });
@@ -108,8 +113,8 @@ export function parseWebhookEvent(rawBody: Record<string, unknown>): WebhookEven
       api_version: typeof api_version === 'number' ? api_version : 1,
       event_type,
       created_date: String(created_date || new Date().toISOString()),
-      resource_id: String(resource_id),
-      resource_type: String(resource_type),
+      resource_id: String(extractedResourceId || 'unknown'),
+      resource_type: String(resource_type || 'payment'),
       resource: resource as Record<string, unknown>,
     };
   } catch (error) {

@@ -22,11 +22,12 @@ const logger = getLogger(module);
 
 interface WebhookData {
   webhook_id: string;
-  govuk_pay_id: string;
+  payment_id: string;
   event_type: string;
   status: string;
-  raw_payload: string;
-  retry_count: number;
+  raw_payload: any;  // JSONB
+  correlation_id?: string;
+  created_by?: string;
 }
 
 interface WebhookCreateResult {
@@ -54,11 +55,12 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
   try {
     const result = await db.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
       data.webhook_id,
-      data.govuk_pay_id,
+      data.payment_id,
       data.event_type,
       data.status,
       data.raw_payload,
-      data.retry_count,
+      data.created_by || 'inbound-event-receiver',
+      data.correlation_id,
     ]);
 
     const row = result.rows?.[0];
@@ -67,7 +69,7 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
     if (isDuplicate) {
       logger.info('[WebhookRepository] Duplicate webhook detected via ON CONFLICT', {
         webhookId: data.webhook_id,
-        govukPayId: data.govuk_pay_id,
+        paymentId: data.payment_id,
         existingStatus: row?.status,
       });
       return {
@@ -78,7 +80,8 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
 
     logger.info('[WebhookRepository] Webhook record created', {
       webhookId: data.webhook_id,
-      govukPayId: data.govuk_pay_id,
+      paymentId: data.payment_id,
+      enqueuedAt: null,  // Will be updated by pay-callback-relay
     });
 
     return {
@@ -130,67 +133,6 @@ export async function updateWebhookStatus(webhookId: string, status: string): Pr
     });
   } catch (error) {
     logger.error('[WebhookRepository] Error updating webhook status', {
-      error: error instanceof Error ? error.message : String(error),
-      webhookId,
-    });
-    throw error;
-  }
-}
-
-/**
- * Record a retryable error and schedule the next retry attempt
- * Used for transient failures (network timeout, temporary database issues, etc.)
- * 
- * @param webhookId - The webhook message ID that failed
- * @param errorMessage - Description of the error for debugging
- * @param retryIntervals - Array of retry delays in milliseconds [5min, 15min, 1hr, etc.]
- * @throws {Error} If database update fails
- * 
- * @example
- * // First retry after 5 minutes, second after 15 minutes
- * await recordRetryableError('wh_123', 'Connection timeout', [300000, 900000]);
- */
-export async function recordRetryableError(webhookId: string, errorMessage: string, retryIntervals: number[]): Promise<void> {
-  try {
-    await db.query(WEBHOOK_QUERIES.RECORD_RETRYABLE_ERROR, [
-      webhookId,
-      errorMessage,
-    ]);
-
-    logger.info('[WebhookRepository] Retryable error recorded', {
-      webhookId,
-    });
-  } catch (error) {
-    logger.error('[WebhookRepository] Error recording retryable error', {
-      error: error instanceof Error ? error.message : String(error),
-      webhookId,
-    });
-    throw error;
-  }
-}
-
-/**
- * Move a webhook to the dead-letter queue after max retries exhausted
- * This marks the webhook as permanently failed and requiring manual intervention
- * 
- * @param webhookId - The webhook message ID that permanently failed
- * @param errorMessage - Final error message describing why it failed
- * @throws {Error} If database update fails
- * 
- * @example
- * // After 3 failed retry attempts
- * await moveToDeadLetterQueue('wh_123', 'Max retries (3) exceeded: Database connection failed');
- */
-export async function moveToDeadLetterQueue(webhookId: string, errorMessage: string): Promise<void> {
-  try {
-    await db.query(WEBHOOK_QUERIES.MOVE_TO_DEAD_LETTER, [webhookId, errorMessage]);
-
-    logger.info('[WebhookRepository] Webhook moved to dead-letter queue', {
-      webhookId,
-      errorMessage,
-    });
-  } catch (error) {
-    logger.error('[WebhookRepository] Error moving to dead-letter queue', {
       error: error instanceof Error ? error.message : String(error),
       webhookId,
     });
