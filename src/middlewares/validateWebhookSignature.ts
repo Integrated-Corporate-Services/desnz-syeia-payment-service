@@ -6,6 +6,7 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { ERROR_MESSAGES } from '../constants';
 import getLogger from '../utils/loggerHelper';
+import config from '../config/config';
 
 const logger = getLogger(module);
 
@@ -189,6 +190,30 @@ export function validateWebhookSignatureMiddleware(
   res: Response,
   next: NextFunction
 ) {
+  // Check if signature verification is enabled
+  if (!config.features.signatureVerificationEnabled) {
+    logger.info('[Webhook] Signature verification is disabled - skipping validation');
+    
+    // Still parse the event for downstream processing
+    const event = parseWebhookEvent(req.body);
+    if (!event) {
+      logger.warn('[Webhook] Invalid webhook event structure');
+      return res.status(400).json({ error: 'Invalid webhook event structure' });
+    }
+    
+    const paymentId = extractPaymentIdFromEvent(event);
+    if (!paymentId) {
+      logger.warn('[Webhook] Unable to extract payment ID from event');
+      return res.status(400).json({ error: 'Unable to extract payment ID from event' });
+    }
+    
+    // Attach validated data to request
+    (req as any).webhookEvent = event;
+    (req as any).paymentId = paymentId;
+    
+    return next();
+  }
+
   const signingKey = process.env.GOVPAY_WEBHOOK_SIGNING_KEY || '';
 
   if (!signingKey) {

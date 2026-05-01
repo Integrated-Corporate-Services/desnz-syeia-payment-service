@@ -74,7 +74,7 @@ services:
       GOVPAY_WEBHOOK_SIGNING_KEY: dev-signing-key-change-in-production
       GOVPAY_API_KEY: dev-api-key-change-in-production
 
-      SIGNATURE_VERIFICATION_ENABLED: "false"
+      SIGNATURE_VERIFICATION_ENABLED: "true"
       DETAILED_LOGGING: "true"
 
     depends_on:
