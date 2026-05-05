@@ -22,6 +22,7 @@ echo "desnz-syeia-pay-callback-reconciler"
 echo "[2/8] Building reconciler Lambda ZIP..."
 cp -r /lambda-src/reconciler /tmp/reconciler-build
 cd /tmp/reconciler-build
+rm -f package-lock.json
 npm install --omit=dev --silent
 zip -r /tmp/pay-callback-reconciler.zip . \
   --exclude "*.env*" \

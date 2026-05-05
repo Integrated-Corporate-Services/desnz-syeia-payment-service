@@ -28,13 +28,9 @@ services:
       MINISTACK_REGION: eu-west-2
       MINISTACK_ACCOUNT_ID: "000000000000"
       LOG_LEVEL: INFO
-      LAMBDA_EXECUTOR: docker
-      DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-desnz-syeia}_desnz-syeia-network
-      LAMBDA_REMOTE_DOCKER_VOLUME_MOUNT: ${COMPOSE_PROJECT_NAME:-desnz-syeia}_lambda-docker-volume
     volumes:
       - ./localstack-init:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock
-      - lambda-docker-volume:/var/task
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4566/_ministack/health').status==200 else 1)\""]
       interval: 10s
@@ -99,8 +95,8 @@ services:
       dockerfile: localstack-init/Dockerfile
     container_name: desnz-syeia-lambda-register
     volumes:
-      - ../lambdas/pay-callback-reconciler:/lambda-src/reconciler:ro
-      - ../lambdas/pay-callback-relay:/lambda-src/relay:ro
+      - ../DESNZ-SYEIA-Lambdas/pay-callback-reconciler:/lambda-src/reconciler:ro
+      - ../DESNZ-SYEIA-Lambdas/pay-callback-relay:/lambda-src/relay:ro
     depends_on:
       ministack:
         condition: service_healthy
@@ -133,8 +129,6 @@ services:
 
 volumes:
   postgres-data:
-    driver: local
-  lambda-docker-volume:
     driver: local
 
 networks:
