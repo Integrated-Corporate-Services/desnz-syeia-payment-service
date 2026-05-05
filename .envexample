@@ -1,0 +1,36 @@
+# Callback Service Configuration
+
+# Server
+HOST=localhost
+PORT=3001
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=appdb
+DB_USER=postgres
+DB_PASSWORD=postgres
+PGSSLMODE=disable
+
+# Environment
+NODE_ENV=local
+LOG_LEVEL=info
+
+# Main Backend Service URL (for REST calls back from callbacks)
+BACKEND_SERVICE_URL=http://localhost:3000/backend
+
+# GOV.UK Pay Configuration
+GOVPAY_API_URL=https://publicapi.payments.service.gov.uk/v1/payments
+GOVPAY_API_KEY=your-govpay-api-key-here
+GOVPAY_TIMEOUT=10000
+
+# GOV.UK Pay Webhook Signing
+GOVPAY_WEBHOOK_SIGNING_KEY=your-webhook-signing-key-here
+
+# Session
+SESSION_SECRET=dev-session-secret-change-in-production
+
+# Feature flags
+CALLBACK_SERVICE_ENABLED=true
+RETRY_ENABLED=true
+DLQ_ENABLED=true
