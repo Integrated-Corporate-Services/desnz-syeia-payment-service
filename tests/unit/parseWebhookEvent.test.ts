@@ -127,7 +127,7 @@ describe('parseWebhookEvent', () => {
     expect(result).toBeNull();
   });
 
-  it('should return null for missing resource_id', () => {
+  it('should extract resource_id from resource.payment_id if missing at top level', () => {
     const rawBody = {
       webhook_message_id: 'evt_test_12345',
       api_version: 1,
@@ -138,10 +138,11 @@ describe('parseWebhookEvent', () => {
 
     const result = parseWebhookEvent(rawBody);
 
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.resource_id).toBe('pay_12345');
   });
 
-  it('should return null for missing resource_type', () => {
+  it('should default resource_type to payment if missing', () => {
     const rawBody = {
       webhook_message_id: 'evt_test_12345',
       api_version: 1,
@@ -152,7 +153,8 @@ describe('parseWebhookEvent', () => {
 
     const result = parseWebhookEvent(rawBody);
 
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.resource_type).toBe('payment');
   });
 
   it('should default api_version to 1 if not provided', () => {
