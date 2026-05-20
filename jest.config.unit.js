@@ -2,7 +2,8 @@
 module.exports = {
   displayName: 'Unit Tests',
   testEnvironment: 'node',
-  testMatch: ['**/*.test.ts', '**/*.test.js'],
+  testMatch: ['**/tests/unit/**/*.test.ts', '**/tests/unit/**/*.test.js'],
+  testPathIgnorePatterns: ['/node_modules/', '/tests/integration/'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': 'ts-jest',

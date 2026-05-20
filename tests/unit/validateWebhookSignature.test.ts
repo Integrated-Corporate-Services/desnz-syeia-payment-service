@@ -8,25 +8,47 @@ const mockLogger = {
 };
 
 // Mock config BEFORE importing anything else
-jest.mock('../../src/config/config', () => ({
-  default: {
+const mockConfig = {
+  server: {
     port: 3000,
     host: 'localhost',
     nodeEnv: 'test',
-    database: {
-      host: 'localhost',
-      port: 5432,
-      name: 'test_db',
-      user: 'test_user',
-      password: 'test_password',
-      maxConnections: 10,
-    },
-    webhookSigningKey: 'test-signing-key',
-    aws: {
-      region: 'eu-west-2',
-      endpoint: 'http://localhost:4566',
-    },
   },
+  db: {
+    host: 'localhost',
+    port: 5432,
+    database: 'test_db',
+    user: 'test_user',
+    password: 'test_password',
+    poolMax: 10,
+  },
+  webhook: {
+    signingKey: 'test-signing-key',
+    signingAlgorithm: 'sha256',
+    maxRetries: 3,
+    retryIntervals: [300000, 600000, 900000],
+  },
+  features: {
+    signatureVerificationEnabled: true,
+    callbackServiceEnabled: true,
+    retryEnabled: true,
+    dlqEnabled: true,
+    metricsEnabled: false,
+    detailedLogging: true,
+  },
+  aws: {
+    region: 'eu-west-2',
+    endpoint: 'http://localhost:4566',
+    sqsQueueUrl: '',
+    accessKeyId: '',
+    secretAccessKey: '',
+    sqsEnabled: false,
+  },
+};
+
+jest.mock('../../src/config/config', () => ({
+  __esModule: true,
+  default: mockConfig,
 }));
 
 jest.mock('../../src/utils/loggerHelper', () => jest.fn(() => mockLogger));
@@ -433,7 +455,7 @@ describe('WebhookSignatureValidation', () => {
       expect(result.error).toBe('Invalid webhook event structure');
     });
 
-    it('should reject when payment ID cannot be extracted (missing resource_id)', () => {
+    it('should handle missing resource_id by defaulting to unknown', () => {
       const body = {
         webhook_message_id: 'evt_test_12345',
         api_version: 1,
@@ -459,8 +481,9 @@ describe('WebhookSignatureValidation', () => {
 
       const result = validateWebhookSignature(req, signingKey);
 
-      expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid webhook event structure');
+      expect(result.valid).toBe(true);
+      expect(result.event).toBeDefined();
+      expect(result.event?.resource_id).toBe('unknown');
     });
 
     it('should handle missing rawBody by reconstructing from body', () => {

@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM public.ecr.aws/docker/library/node:18-alpine AS builder
+FROM public.ecr.aws/docker/library/node:22-alpine AS builder
 WORKDIR /app
 
 # Install ALL deps (including dev) so tsc is available
@@ -17,7 +17,7 @@ RUN npm run build
 RUN test -f ./dist/server.js || (echo "dist/server.js missing"; ls -R; exit 1)
 
 # ---- Runtime stage ----
-FROM public.ecr.aws/docker/library/node:18-alpine AS runtime
+FROM public.ecr.aws/docker/library/node:22-alpine AS runtime
 WORKDIR /app
 
 # Install ONLY production deps
