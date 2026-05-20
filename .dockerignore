@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Build output
+dist
+*.log
+
+# Tests
+tests
+**/*.test.ts
+**/*.spec.ts
+jest.config.js
+coverage
+
+# Development
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+README.md
+DEPLOYMENT.md
+*.md
+
+# CI/CD (if any)
+.github
+.gitlab-ci.yml
+
+# OS
+.DS_Store
+Thumbs.db
