@@ -184,8 +184,8 @@ export const dbConfig = {
   connectionTimeoutMs: getNumberConfig('DB_CONN_MS', 15000),
   queryTimeoutMs: getNumberConfig('DB_QUERY_MS', 40000),
   
-  // SSL configuration
-  sslMode: getConfigValue('PGSSLMODE', 'disable'),
+  // SSL configuration — require for deployed envs (same pattern as backend/RDS); disable for local only
+  sslMode: getConfigValue('PGSSLMODE', isLocal ? 'disable' : 'require'),
   
   // Application name for connection tracking
   applicationName: getConfigValue('DB_APPLICATION_NAME', 'integration-service'),
