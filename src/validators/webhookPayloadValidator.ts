@@ -10,7 +10,7 @@ import {
   PaymentResource,
   PaymentState,
 } from '../types/webhook.types';
-import { WEBHOOK_EVENT_TYPES } from '../constants/webhook.constants';
+import { WEBHOOK_EVENT_TYPES, GOV_UK_PAY_STATUSES } from '../constants/webhook.constants';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
@@ -37,8 +37,11 @@ export function validateWebhookPayload(payload: any): ValidationResult {
   validateRequiredString(payload, 'resource_type', errors);
   validateRequiredString(payload, 'event_type', errors);
 
-  // Validate resource_type is "payment"
-  if (payload.resource_type && payload.resource_type !== 'payment') {
+  // Validate resource_type is "payment" (case-insensitive - sandbox may send "PAYMENT")
+  if (
+    payload.resource_type &&
+    String(payload.resource_type).toLowerCase() !== 'payment'
+  ) {
     errors.push({
       field: 'resource_type',
       message: 'resource_type must be "payment"',
@@ -147,17 +150,7 @@ function validatePaymentState(state: any, errors: ValidationError[]): void {
   validateRequiredBoolean(state, 'finished', errors, 'resource.state.finished');
 
   // Validate status is a known value
-  const validStatuses = [
-    'created',
-    'started',
-    'submitted',
-    'success',
-    'failed',
-    'cancelled',
-    'error',
-    'capturable',
-    'expired',
-  ];
+  const validStatuses = Object.values(GOV_UK_PAY_STATUSES);
 
   if (state.status && !validStatuses.includes(state.status)) {
     errors.push({
