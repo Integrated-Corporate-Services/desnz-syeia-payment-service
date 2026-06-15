@@ -22,13 +22,20 @@ export const WEBHOOK_STATUS = {
  * @see https://docs.payments.service.gov.uk/webhooks/#receive-automatic-payment-event-updates-using-webhooks
  */
 export const WEBHOOK_EVENT_TYPES = {
-  // Payment event types (used for application flow)
+  // Official GOV.UK Pay card payment webhook event types
+  // @see https://docs.payments.service.gov.uk/webhooks/
+  CARD_PAYMENT_STARTED: 'card_payment_started',
   CARD_PAYMENT_SUCCEEDED: 'card_payment_succeeded',      // Payment service provider has authorised the payment
   CARD_PAYMENT_CAPTURED: 'card_payment_captured',        // GOV.UK Pay has taken ('captured') the payment from user's bank account
   CARD_PAYMENT_REFUNDED: 'card_payment_refunded',        // Refund has been sent to user's bank account by payment service provider
-  
-  // Note: card_payment_settled is available but not used - it's for reconciliation/accounting purposes only
-  
+  CARD_PAYMENT_FAILED: 'card_payment_failed',
+  CARD_PAYMENT_EXPIRED: 'card_payment_expired',
+  CARD_PAYMENT_SETTLED: 'card_payment_settled',            // For reconciliation/accounting purposes
+
+  // Used in tests and some provider integrations (not in official webhook subscription enum)
+  CARD_PAYMENT_CANCELLED: 'card_payment_cancelled',
+  CARD_PAYMENT_CREATED: 'card_payment_created',
+
   // Legacy event types (for backward compatibility - may not be sent by GOV.UK Pay)
   PAYMENT_COMPLETED: 'PAYMENT_COMPLETED',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
@@ -58,6 +65,7 @@ export const GOV_UK_PAY_STATUSES = {
   // Special states
   CAPTURABLE: 'capturable',              // Payment authorized and ready to capture (delayed capture)
   EXPIRED: 'expired',                    // Payment session expired without completion
+  TIMEDOUT: 'timedout',                  // Sandbox provider status for expired payments (P0020)
 } as const;
 
 /**

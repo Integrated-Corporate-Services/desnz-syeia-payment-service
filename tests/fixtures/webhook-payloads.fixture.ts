@@ -24,15 +24,34 @@ export interface PaymentResource {
   amount: number;
   reference: string;
   description?: string;
-  state: PaymentState;
+  email?: string;
+  language?: string;
   return_url?: string;
+  state: PaymentState;
   created_date: string;
   card_details?: CardDetails;
   settlement_summary?: SettlementSummary;
+  refund_summary?: {
+    status: string;
+    amount_available: number;
+    amount_submitted: number;
+  };
+  delayed_capture?: boolean;
+  moto?: boolean;
 }
 
 export interface PaymentState {
-  status: 'created' | 'started' | 'submitted' | 'success' | 'failed' | 'cancelled' | 'error';
+  status:
+    | 'created'
+    | 'started'
+    | 'submitted'
+    | 'success'
+    | 'failed'
+    | 'cancelled'
+    | 'error'
+    | 'capturable'
+    | 'expired'
+    | 'timedout';
   finished: boolean;
   message?: string;
   code?: string;
@@ -45,11 +64,18 @@ export interface CardDetails {
   first_digits_card_number: string;
   expiry_date: string;
   cardholder_name: string;
+  billing_address?: {
+    line1?: string;
+    line2?: string;
+    postcode?: string;
+    city?: string;
+    country?: string;
+  };
 }
 
 export interface SettlementSummary {
-  capture_submit_time: string;
-  captured_date: string;
+  capture_submit_time?: string;
+  captured_date?: string;
   settled_date?: string;
 }
 
@@ -224,6 +250,58 @@ export const PAYMENT_CANCELLED_WEBHOOK: WebhookPayload = {
     },
     return_url: 'https://example.com/return',
     created_date: '2024-01-15T10:00:00.000Z',
+  },
+};
+
+/**
+ * Payment Expired Event - sandbox sends uppercase resource_type and timedout status
+ */
+export const PAYMENT_EXPIRED_WEBHOOK: WebhookPayload = {
+  webhook_message_id: 'vin6vdab2n08h2ttfeepetglh',
+  api_version: 1,
+  event_type: 'card_payment_expired',
+  created_date: '2026-06-12T10:03:58.239Z',
+  resource_id: 'qiqgg6pd8ps9runhjfg6adgf5m',
+  resource_type: 'PAYMENT',
+  resource: {
+    payment_id: 'qiqgg6pd8ps9runhjfg6adgf5m',
+    payment_provider: 'sandbox',
+    amount: 40250,
+    reference: '0f740281-8556-4e5b-94b9-b8f2b290d346',
+    description: 'Section 37 Application Payment - 0f740281-8556-4e5b-94b9-b8f2b290d346',
+    email: 'ss@yahoo.com',
+    language: 'en',
+    return_url: 'https://dev.syeia.energysecurity.gov.uk/frontend/payment/callback',
+    state: {
+      code: 'P0020',
+      status: 'timedout',
+      message: 'Payment expired',
+      finished: true,
+    },
+    created_date: '2026-06-12T08:29:07.535Z',
+    refund_summary: {
+      status: 'pending',
+      amount_available: 40250,
+      amount_submitted: 0,
+    },
+    delayed_capture: false,
+    moto: false,
+    card_details: {
+      card_type: 'credit',
+      card_brand: 'Visa',
+      expiry_date: '10/28',
+      billing_address: {
+        city: 'brighton',
+        line1: 'test',
+        line2: '',
+        country: 'GB',
+        postcode: 'bn14jz',
+      },
+      cardholder_name: 'test',
+      last_digits_card_number: '1111',
+      first_digits_card_number: '444433',
+    },
+    settlement_summary: {},
   },
 };
 
