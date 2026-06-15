@@ -1,6 +1,7 @@
 // Express Application Setup
 import express, { Express, Request, Response, NextFunction } from 'express';
 import callbackRoutes from './routes/callback';
+import uksbsCallbackRoutes from './routes/uksbsCallback';
 import getLogger from './utils/loggerHelper';
 import config from './config/config';
 import { HTTP_STATUS } from './constants/error.constants';
@@ -105,6 +106,7 @@ export function createApp(): Express {
 
   // Routes
   app.use('/callback', callbackRoutes);
+  app.use('/uksbs-callback', uksbsCallbackRoutes);
 
   // Health check (root level too) - with DB connectivity check
   app.get('/health', async (req: Request, res: Response) => {

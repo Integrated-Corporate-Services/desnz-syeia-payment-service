@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pay Signature Generator</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --ink: #13233a;
+      --muted: #5a6b84;
+      --border: #d6e0ee;
+      --primary: #005ea5;
+      --primary-strong: #003e73;
+      --ok-bg: #e8f7ee;
+      --ok-ink: #155d32;
+      --warn-bg: #fff3cd;
+      --warn-ink: #7a5b00;
+      --err-bg: #fbeaea;
+      --err-ink: #8d1f1f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 0%, #ffffff 0%, var(--bg) 55%);
+    }
+
+    .page {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 6px 22px rgba(19, 35, 58, 0.06);
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--ink);
+      background: #fff;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 300px;
+      resize: vertical;
+      line-height: 1.35;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92rem;
+    }
+
+    input {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-strong);
+    }
+
+    .btn-neutral {
+      background: #eef3fa;
+      color: var(--ink);
+      border-color: var(--border);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+
+    .output {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .result {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f9fbff;
+      padding: 10px 12px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.9rem;
+      word-break: break-all;
+      min-height: 48px;
+    }
+
+    .banner {
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .banner.ok {
+      display: block;
+      background: var(--ok-bg);
+      color: var(--ok-ink);
+      border: 1px solid #bce5c9;
+    }
+
+    .banner.warn {
+      display: block;
+      background: var(--warn-bg);
+      color: var(--warn-ink);
+      border: 1px solid #f3de9a;
+    }
+
+    .banner.err {
+      display: block;
+      background: var(--err-bg);
+      color: var(--err-ink);
+      border: 1px solid #f0c8c8;
+    }
+
+    .small {
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <h1>GOV.UK Pay Signature Generator</h1>
+      <p class="subtitle">
+        Computes HMAC-SHA256 signature for your webhook payload to use as Pay-Signature.
+      </p>
+    </section>
+
+    <section class="card grid">
+      <div>
+        <label for="payload">Raw JSON Payload</label>
+        <textarea id="payload" spellcheck="false">{
+  "webhook_message_id": "evt_test_001",
+  "api_version": 1,
+  "event_type": "card_payment_succeeded",
+  "created_date": "2026-06-12T10:00:00.000Z",
+  "resource_id": "pay_test_001",
+  "resource_type": "payment",
+  "resource": {
+    "payment_id": "pay_test_001",
+    "payment_provider": "worldpay",
+    "amount": 10000,
+    "reference": "REF-001",
+    "description": "Test payment",
+    "state": {
+      "status": "success",
+      "finished": true
+    },
+    "created_date": "2026-06-12T10:00:00.000Z"
+  }
+}</textarea>
+        <p class="hint">Signature is generated from the exact raw text in this box.</p>
+      </div>
+
+      <div>
+        <label for="signingKey">Signing Key</label>
+        <input id="signingKey" type="text" value="dev-signing-key-change-in-production" />
+
+        <div class="actions">
+          <button id="generateBtn" class="btn-primary" type="button">Generate Signature</button>
+          <button id="formatBtn" class="btn-neutral" type="button">Format JSON</button>
+          <button id="copyBtn" class="btn-neutral" type="button">Copy Signature</button>
+          <button id="clearBtn" class="btn-neutral" type="button">Clear</button>
+        </div>
+
+        <div id="message" class="banner" role="status" aria-live="polite"></div>
+
+        <div class="output">
+          <label>Pay-Signature (hex)</label>
+          <div id="signatureOutput" class="result"></div>
+
+          <label>Suggested Header</label>
+          <div id="headerOutput" class="result"></div>
+        </div>
+
+        <p class="small">Use in Postman header: Pay-Signature: [generated-value]</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const payloadEl = document.getElementById('payload');
+    const signingKeyEl = document.getElementById('signingKey');
+    const generateBtn = document.getElementById('generateBtn');
+    const formatBtn = document.getElementById('formatBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const signatureOutput = document.getElementById('signatureOutput');
+    const headerOutput = document.getElementById('headerOutput');
+    const messageEl = document.getElementById('message');
+
+    function setMessage(type, text) {
+      messageEl.className = 'banner ' + type;
+      messageEl.textContent = text;
+    }
+
+    function clearMessage() {
+      messageEl.className = 'banner';
+      messageEl.textContent = '';
+    }
+
+    function arrayBufferToHex(buffer) {
+      return Array.from(new Uint8Array(buffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    async function hmacSha256Hex(key, text) {
+      const encoder = new TextEncoder();
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(key),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+
+      const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(text));
+      return arrayBufferToHex(signatureBuffer);
+    }
+
+    function tryValidateJson(rawText) {
+      try {
+        JSON.parse(rawText);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function generateSignature() {
+      clearMessage();
+      const payload = payloadEl.value;
+      const signingKey = signingKeyEl.value;
+
+      if (!payload || payload.trim().length === 0) {
+        setMessage('warn', 'Payload is required.');
+        return;
+      }
+
+      if (!signingKey || signingKey.trim().length === 0) {
+        setMessage('warn', 'Signing key is required.');
+        return;
+      }
+
+      if (!tryValidateJson(payload)) {
+        setMessage('warn', 'Payload is not valid JSON. Fix it or click Format JSON after correcting syntax.');
+        return;
+      }
+
+      try {
+        const signature = await hmacSha256Hex(signingKey, payload);
+        signatureOutput.textContent = signature;
+        headerOutput.textContent = 'Pay-Signature: ' + signature;
+        setMessage('ok', 'Signature generated successfully.');
+      } catch (error) {
+        signatureOutput.textContent = '';
+        headerOutput.textContent = '';
+        setMessage('err', 'Failed to generate signature: ' + (error && error.message ? error.message : String(error)));
+      }
+    }
+
+    function formatJson() {
+      clearMessage();
+      const payload = payloadEl.value;
+      try {
+        const parsed = JSON.parse(payload);
+        payloadEl.value = JSON.stringify(parsed, null, 2);
+        setMessage('ok', 'Payload formatted successfully.');
+      } catch {
+        setMessage('warn', 'Cannot format because payload is not valid JSON.');
+      }
+    }
+
+    async function copySignature() {
+      const sig = signatureOutput.textContent.trim();
+      if (!sig) {
+        setMessage('warn', 'Generate a signature first.');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(sig);
+        setMessage('ok', 'Signature copied to clipboard.');
+      } catch {
+        setMessage('warn', 'Clipboard access failed. Copy manually from the output field.');
+      }
+    }
+
+    function clearAll() {
+      payloadEl.value = '';
+      signingKeyEl.value = '';
+      signatureOutput.textContent = '';
+      headerOutput.textContent = '';
+      clearMessage();
+    }
+
+    generateBtn.addEventListener('click', generateSignature);
+    formatBtn.addEventListener('click', formatJson);
+    copyBtn.addEventListener('click', copySignature);
+    clearBtn.addEventListener('click', clearAll);
+  </script>
+</body>
+</html>
