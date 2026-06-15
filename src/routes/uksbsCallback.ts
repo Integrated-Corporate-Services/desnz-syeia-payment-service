@@ -1,8 +1,9 @@
 // UKSBS Callback Routes
 import express from 'express';
+import { handleUKSBSWebhook, uksbsHealthCheck } from '../controllers/uksbsCallbackController';
+import { validateUKSBSWebhookPayloadMiddleware } from '../validators/uksbsWebhookPayloadValidator';
+
 const router = express.Router();
-const { handleUKSBSWebhook, uksbsHealthCheck } = require('../controllers/uksbsCallbackController');
-const { validateUKSBSWebhookPayloadMiddleware } = require('../validators/uksbsWebhookPayloadValidator');
 
 // Health check endpoint for UKSBS webhook service
 router.get('/health', uksbsHealthCheck);
