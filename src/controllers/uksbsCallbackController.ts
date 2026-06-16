@@ -40,12 +40,13 @@ interface UKSBSWebhookResponse {
 }
 
 /**
- * Validates and sanitizes correlation ID
+ * Validates and sanitizes Pay-Signature header for correlation tracking
  */
-function getValidCorrelationId(headerValue: unknown): string {
+function getValidPaySignature(headerValue: unknown): string {
   if (typeof headerValue === 'string' && headerValue.length > 0 && headerValue.length <= 128) {
     const sanitized = headerValue.trim();
-    if (uuidValidate(sanitized)) {
+    // Pay-Signature is HMAC-SHA256 hex (64 characters), but also accept UUIDs for backward compatibility
+    if (sanitized.length === 64 || uuidValidate(sanitized)) {
       return sanitized;
     }
   }
@@ -88,7 +89,7 @@ async function handleUKSBSWebhook(req: UKSBSWebhookRequest, res: Response): Prom
   // Extract identifiers from UKSBS webhook structure
   const eventId = webhookEvent?.event?.eventId || uuidv4();
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
-  const correlationId = getValidCorrelationId(req.headers['x-correlation-id']);
+  const correlationId = getValidPaySignature(req.headers['pay-signature']);
 
   // Validate webhook event exists
   if (!webhookEvent) {

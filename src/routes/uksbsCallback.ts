@@ -2,6 +2,7 @@
 import express from 'express';
 import { handleUKSBSWebhook, uksbsHealthCheck } from '../controllers/uksbsCallbackController';
 import { validateUKSBSWebhookPayloadMiddleware } from '../validators/uksbsWebhookPayloadValidator';
+import { validateUKSBSWebhookSignatureMiddleware } from '../middlewares/validateUKSBSWebhookSignature';
 
 const router = express.Router();
 
@@ -10,12 +11,12 @@ router.get('/health', uksbsHealthCheck);
 
 // UKSBS Payment webhook endpoint for UKSBS payment notifications
 // Middleware chain:
-// 1. Payload structure validation (UKSBS format)
-// 2. Webhook processing
-// Note: UKSBS may use different authentication mechanism than Pay-Signature
-// Add signature verification middleware here if required by UKSBS specification
+// 1. Pay-Signature verification (HMAC-SHA256)
+// 2. Payload structure validation (UKSBS format)
+// 3. Webhook processing
 router.post(
   '/payment',
+  validateUKSBSWebhookSignatureMiddleware,
   validateUKSBSWebhookPayloadMiddleware,
   handleUKSBSWebhook
 );
