@@ -227,6 +227,14 @@ export const govPayConfig = {
 };
 
 /**
+ * UKSBS Webhook Configuration
+ */
+export const uksbsWebhookConfig = {
+  signingKey: getConfigValue('UKSBS_WEBHOOK_SIGNING_KEY', 'dev-uksbs-key-change-in-production'),
+  signingAlgorithm: getConfigValue('UKSBS_SIGNING_ALGORITHM', 'sha256'),
+};
+
+/**
  * Feature Flags
  */
 export const featureFlags = {
@@ -316,6 +324,7 @@ const config = {
   backend: backendConfig,
   webhook: webhookConfig,
   govPay: govPayConfig,
+  uksbsWebhookConfig: uksbsWebhookConfig,
   features: featureFlags,
   security: securityConfig,
   aws: awsConfig,

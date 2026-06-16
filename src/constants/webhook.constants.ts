@@ -127,6 +127,51 @@ export const RETRY_STRATEGY = {
 } as const;
 
 /**
+ * UKSBS Webhook Constants
+ * UK Shared Business Services payment notification constants
+ */
+export const UKSBS_WEBHOOK_CONSTANTS = {
+  /**
+   * UKSBS Event Types
+   */
+  EVENT_TYPES: {
+    PAYMENT_STATUS_UPDATE: 'PAYMENT_STATUS_UPDATE',
+    PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
+    PAYMENT_FAILED: 'PAYMENT_FAILED',
+    REFUND_PROCESSED: 'REFUND_PROCESSED',
+  },
+  
+  /**
+   * UKSBS Payment Status Values
+   */
+  PAYMENT_STATUSES: {
+    PAID: 'PAID',
+    PENDING: 'PENDING',
+    FAILED: 'FAILED',
+    CANCELLED: 'CANCELLED',
+    REFUNDED: 'REFUNDED',
+    PARTIALLY_REFUNDED: 'PARTIALLY_REFUNDED',
+  },
+  
+  /**
+   * UKSBS Currency Codes
+   */
+  CURRENCY_CODES: {
+    GBP: 'GBP',
+    EUR: 'EUR',
+    USD: 'USD',
+  },
+  
+  /**
+   * UKSBS Source Systems
+   */
+  SOURCE_SYSTEMS: {
+    PARTNER_SYSTEM: 'PARTNER-SYSTEM',
+    UKSBS: 'UKSBS',
+  },
+} as const;
+
+/**
  * Type exports for type safety
  */
 export type WebhookStatus = typeof WEBHOOK_STATUS[keyof typeof WEBHOOK_STATUS];
@@ -135,3 +180,8 @@ export type GovUkPayStatus = typeof GOV_UK_PAY_STATUSES[keyof typeof GOV_UK_PAY_
 export type RefundStatus = typeof REFUND_STATUSES[keyof typeof REFUND_STATUSES];
 export type CardType = typeof CARD_TYPES[keyof typeof CARD_TYPES];
 export type CardBrand = typeof CARD_BRANDS[keyof typeof CARD_BRANDS];
+
+// UKSBS type exports
+export type UKSBSEventType = typeof UKSBS_WEBHOOK_CONSTANTS.EVENT_TYPES[keyof typeof UKSBS_WEBHOOK_CONSTANTS.EVENT_TYPES];
+export type UKSBSPaymentStatus = typeof UKSBS_WEBHOOK_CONSTANTS.PAYMENT_STATUSES[keyof typeof UKSBS_WEBHOOK_CONSTANTS.PAYMENT_STATUSES];
+export type UKSBSCurrencyCode = typeof UKSBS_WEBHOOK_CONSTANTS.CURRENCY_CODES[keyof typeof UKSBS_WEBHOOK_CONSTANTS.CURRENCY_CODES];

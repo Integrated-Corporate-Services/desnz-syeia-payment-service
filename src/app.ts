@@ -1,6 +1,7 @@
 // Express Application Setup
 import express, { Express, Request, Response, NextFunction } from 'express';
 import callbackRoutes from './routes/callback';
+import uksbsCallbackRoutes from './routes/uksbsCallback';
 import getLogger from './utils/loggerHelper';
 import config from './config/config';
 import { HTTP_STATUS } from './constants/error.constants';
@@ -105,6 +106,30 @@ export function createApp(): Express {
 
   // Routes
   app.use('/callback', callbackRoutes);
+  app.use('/webhooks/payments', uksbsCallbackRoutes);
+
+  // Debug endpoint to list all routes (helpful for troubleshooting)
+  app.get('/routes', (req: Request, res: Response) => {
+    const routes = {
+      message: 'Available routes in this service',
+      routes: {
+        'GOV.UK Pay Webhooks': {
+          'Health Check': 'GET /callback/health',
+          'Webhook Receiver': 'POST /callback/payment',
+        },
+        'UKSBS Webhooks': {
+          'Health Check': 'GET /webhooks/payments/health',
+          'Webhook Receiver': 'POST /webhooks/payments/payment',
+        },
+        'General': {
+          'Health Check': 'GET /health',
+          'Routes List': 'GET /routes',
+        },
+      },
+      timestamp: new Date().toISOString(),
+    };
+    res.json(routes);
+  });
 
   // Health check (root level too) - with DB connectivity check
   app.get('/health', async (req: Request, res: Response) => {
@@ -144,10 +169,36 @@ export function createApp(): Express {
     res.json(health);
   });
 
-  // 404 handler
+  // 404 handler with detailed debugging info
   app.use((req: Request, res: Response) => {
-    logger.warn('[HTTP] Not found', { method: req.method, path: req.path });
-    res.status(404).json({ error: 'Not found' });
+    logger.warn('[HTTP] Route not found', { 
+      method: req.method, 
+      path: req.path,
+      url: req.url,
+      originalUrl: req.originalUrl,
+      headers: req.headers,
+    });
+    
+    res.status(404).json({ 
+      error: 'Route not found',
+      requestedPath: req.path,
+      requestedUrl: req.url,
+      method: req.method,
+      availableRoutes: {
+        govukPay: {
+          health: 'GET /callback/health',
+          webhook: 'POST /callback/payment',
+        },
+        uksbs: {
+          health: 'GET /webhooks/payments/health',
+          webhook: 'POST /webhooks/payments/payment',
+        },
+        general: {
+          health: 'GET /health',
+        },
+      },
+      hint: 'Check if the route path matches exactly (case-sensitive)',
+    });
   });
 
   // Error handler
