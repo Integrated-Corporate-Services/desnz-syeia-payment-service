@@ -1,28 +1,28 @@
 /**
- * UKSBS Webhook Payload Validator
- * Validates incoming UKSBS webhook payloads against specification
+ * BACS Webhook Payload Validator
+ * Validates incoming BACS webhook payloads against specification
  */
 
 import { Request, Response, NextFunction } from 'express';
 import {
-  UKSBSWebhookPayload,
-  UKSBSValidationError,
-  UKSBSValidationResult,
-  UKSBS_EVENT_TYPES,
-  UKSBS_PAYMENT_STATUSES,
-  UKSBS_CURRENCY_CODES,
-  isUKSBSWebhookPayload,
-} from '../types/uksbsWebhook.types';
+  BACSWebhookPayload,
+  BACSValidationError,
+  BACSValidationResult,
+  BACS_EVENT_TYPES,
+  BACS_PAYMENT_STATUSES,
+  BACS_CURRENCY_CODES,
+  isBACSWebhookPayload,
+} from '../types/bacsWebhook.types';
 import { HTTP_STATUS } from '../constants/error.constants';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
 /**
- * Validate complete UKSBS webhook payload
+ * Validate complete BACS webhook payload
  */
-export function validateUKSBSWebhookPayload(payload: any): UKSBSValidationResult {
-  const errors: UKSBSValidationError[] = [];
+export function validateBACSWebhookPayload(payload: any): BACSValidationResult {
+  const errors: BACSValidationError[] = [];
 
   // Check if payload exists
   if (!payload || typeof payload !== 'object') {
@@ -33,10 +33,10 @@ export function validateUKSBSWebhookPayload(payload: any): UKSBSValidationResult
   }
 
   // Type guard check
-  if (!isUKSBSWebhookPayload(payload)) {
+  if (!isBACSWebhookPayload(payload)) {
     errors.push({
       field: 'payload',
-      message: 'Payload structure does not match UKSBS webhook format',
+      message: 'Payload structure does not match BACS webhook format',
     });
     return { valid: false, errors };
   }
@@ -44,8 +44,10 @@ export function validateUKSBSWebhookPayload(payload: any): UKSBSValidationResult
   // Validate event section
   validateEventSection(payload.event, errors);
 
-  // Validate callback section
-  validateCallbackSection(payload.callback, errors);
+  // Validate callback section (optional)
+  if (payload.callback !== undefined) {
+    validateCallbackSection(payload.callback, errors);
+  }
 
   // Validate payment section
   validatePaymentSection(payload.payment, errors);
@@ -62,7 +64,7 @@ export function validateUKSBSWebhookPayload(payload: any): UKSBSValidationResult
 /**
  * Validate event section
  */
-function validateEventSection(event: any, errors: UKSBSValidationError[]): void {
+function validateEventSection(event: any, errors: BACSValidationError[]): void {
   if (!event || typeof event !== 'object') {
     errors.push({ field: 'event', message: 'event section is required and must be an object' });
     return;
@@ -88,7 +90,7 @@ function validateEventSection(event: any, errors: UKSBSValidationError[]): void 
 
   // Validate eventType is recognized
   if (event.eventType && typeof event.eventType === 'string') {
-    const validEventTypes = Object.values(UKSBS_EVENT_TYPES);
+    const validEventTypes = Object.values(BACS_EVENT_TYPES);
     if (!validEventTypes.includes(event.eventType as any)) {
       errors.push({
         field: 'event.eventType',
@@ -109,7 +111,7 @@ function validateEventSection(event: any, errors: UKSBSValidationError[]): void 
     }
   }
 
-  // Validate eventVersion format (e.g., "1.0")
+  // Validate eventVersion format and value (must be "1.0")
   if (event.eventVersion && typeof event.eventVersion === 'string') {
     if (!/^\d+\.\d+$/.test(event.eventVersion)) {
       errors.push({
@@ -117,43 +119,66 @@ function validateEventSection(event: any, errors: UKSBSValidationError[]): void 
         message: 'eventVersion must be in format "X.Y" (e.g., "1.0")',
         value: event.eventVersion,
       });
+    } else if (event.eventVersion !== '1.0') {
+      errors.push({
+        field: 'event.eventVersion',
+        message: 'Only eventVersion "1.0" is supported',
+        value: event.eventVersion,
+      });
     }
   }
 }
 
 /**
- * Validate callback section
+ * Validate callback section (optional)
  */
-function validateCallbackSection(callback: any, errors: UKSBSValidationError[]): void {
+function validateCallbackSection(callback: any, errors: BACSValidationError[]): void {
   if (!callback || typeof callback !== 'object') {
     errors.push({
       field: 'callback',
-      message: 'callback section is required and must be an object',
+      message: 'callback must be an object if present',
     });
     return;
   }
 
-  // Validate required fields
-  validateRequiredString(callback, 'deliveryId', errors, 'callback.deliveryId');
-  validateRequiredNumber(callback, 'attemptNumber', errors, 'callback.attemptNumber');
-
-  // Validate deliveryId is a valid UUID
-  if (callback.deliveryId && typeof callback.deliveryId === 'string') {
-    if (!isValidUUID(callback.deliveryId)) {
+  // Validate optional fields (only if present)
+  if (callback.deliveryId !== undefined) {
+    if (typeof callback.deliveryId !== 'string' || callback.deliveryId.trim().length === 0) {
       errors.push({
         field: 'callback.deliveryId',
-        message: 'deliveryId must be a valid UUID',
+        message: 'deliveryId must be a non-empty string if present',
         value: callback.deliveryId,
       });
     }
   }
 
-  // Validate attemptNumber is a positive integer
-  if (typeof callback.attemptNumber === 'number') {
+  if (callback.attemptNumber !== undefined) {
+    if (typeof callback.attemptNumber !== 'number') {
+      errors.push({
+        field: 'callback.attemptNumber',
+        message: 'attemptNumber must be a number if present',
+        value: callback.attemptNumber,
+      });
+    }
+  }
+
+  // Validate deliveryId format (UUID) if present
+  if (callback.deliveryId && typeof callback.deliveryId === 'string') {
+    if (!isValidUUID(callback.deliveryId)) {
+      errors.push({
+        field: 'callback.deliveryId',
+        message: 'deliveryId must be a valid UUID if present',
+        value: callback.deliveryId,
+      });
+    }
+  }
+
+  // Validate attemptNumber is a positive integer if present
+  if (callback.attemptNumber !== undefined && typeof callback.attemptNumber === 'number') {
     if (!Number.isInteger(callback.attemptNumber) || callback.attemptNumber < 1) {
       errors.push({
         field: 'callback.attemptNumber',
-        message: 'attemptNumber must be a positive integer >= 1',
+        message: 'attemptNumber must be a positive integer >= 1 if present',
         value: callback.attemptNumber,
       });
     }
@@ -163,7 +188,7 @@ function validateCallbackSection(callback: any, errors: UKSBSValidationError[]):
 /**
  * Validate payment section
  */
-function validatePaymentSection(payment: any, errors: UKSBSValidationError[]): void {
+function validatePaymentSection(payment: any, errors: BACSValidationError[]): void {
   if (!payment || typeof payment !== 'object') {
     errors.push({
       field: 'payment',
@@ -190,7 +215,7 @@ function validatePaymentSection(payment: any, errors: UKSBSValidationError[]): v
 /**
  * Validate detail section
  */
-function validateDetailSection(detail: any, errors: UKSBSValidationError[]): void {
+function validateDetailSection(detail: any, errors: BACSValidationError[]): void {
   if (!detail || typeof detail !== 'object') {
     errors.push({
       field: 'detail',
@@ -204,11 +229,21 @@ function validateDetailSection(detail: any, errors: UKSBSValidationError[]): voi
   validateRequiredNumber(detail, 'amount', errors, 'detail.amount');
   validateRequiredString(detail, 'currency', errors, 'detail.currency');
   validateRequiredString(detail, 'paymentDate', errors, 'detail.paymentDate');
-  validateRequiredString(detail, 'transferReference', errors, 'detail.transferReference');
+  
+  // transferReference is optional (FAILED payments may not have a transfer match)
+  if (detail.transferReference !== undefined) {
+    if (typeof detail.transferReference !== 'string' || detail.transferReference.trim().length === 0) {
+      errors.push({
+        field: 'detail.transferReference',
+        message: 'transferReference must be a non-empty string if present',
+        value: detail.transferReference,
+      });
+    }
+  }
 
   // Validate status is recognized
   if (detail.status && typeof detail.status === 'string') {
-    const validStatuses = Object.values(UKSBS_PAYMENT_STATUSES);
+    const validStatuses = Object.values(BACS_PAYMENT_STATUSES);
     if (!validStatuses.includes(detail.status as any)) {
       errors.push({
         field: 'detail.status',
@@ -238,7 +273,7 @@ function validateDetailSection(detail: any, errors: UKSBSValidationError[]): voi
 
   // Validate currency code
   if (detail.currency && typeof detail.currency === 'string') {
-    const validCurrencies = Object.values(UKSBS_CURRENCY_CODES);
+    const validCurrencies = Object.values(BACS_CURRENCY_CODES);
     if (!validCurrencies.includes(detail.currency as any)) {
       errors.push({
         field: 'detail.currency',
@@ -266,7 +301,7 @@ function validateDetailSection(detail: any, errors: UKSBSValidationError[]): voi
 function validateRequiredString(
   obj: any,
   field: string,
-  errors: UKSBSValidationError[],
+  errors: BACSValidationError[],
   fieldPath?: string
 ): void {
   const path = fieldPath || field;
@@ -293,7 +328,7 @@ function validateRequiredString(
 function validateRequiredNumber(
   obj: any,
   field: string,
-  errors: UKSBSValidationError[],
+  errors: BACSValidationError[],
   fieldPath?: string
 ): void {
   const path = fieldPath || field;
@@ -342,9 +377,9 @@ function isValidUUID(uuid: string): boolean {
 }
 
 /**
- * Express middleware for UKSBS webhook payload validation
+ * Express middleware for BACS webhook payload validation
  */
-export function validateUKSBSWebhookPayloadMiddleware(
+export function validateBACSWebhookPayloadMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
@@ -352,25 +387,27 @@ export function validateUKSBSWebhookPayloadMiddleware(
   const correlationId = req.headers['x-correlation-id'] || 'unknown';
 
   // Validate payload
-  const validationResult = validateUKSBSWebhookPayload(req.body);
+  const validationResult = validateBACSWebhookPayload(req.body);
 
   if (!validationResult.valid) {
-    logger.warn('[UKSBSWebhook] Payload validation failed', {
+    logger.warn('[BACSWebhook] Payload validation failed', {
       correlationId,
       errors: validationResult.errors,
     });
 
-    return res.status(HTTP_STATUS.BAD_REQUEST).json({
-      error: 'Invalid webhook payload',
-      validation_errors: validationResult.errors,
+    // Return 422 for schema validation failures (non-retryable)
+    // Per Partner spec: minimal error response, detailed errors are logged
+    // This signals to partner to stop retrying (circuit-breaker for version changes)
+    return res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
+      error: 'Schema validation failed',
     });
   }
 
   // Attach validated data to request for downstream use
-  (req as any).uksbsWebhookEvent = req.body;
+  (req as any).BACSWebhookEvent = req.body;
   (req as any).paymentId = req.body.payment.paymentReference;
 
-  logger.info('[UKSBSWebhook] Payload validation successful', {
+  logger.info('[BACSWebhook] Payload validation successful', {
     correlationId,
     eventId: req.body.event.eventId,
     eventType: req.body.event.eventType,

@@ -1,5 +1,5 @@
-// UKSBS Payment Webhook Service
-// Handles UKSBS webhook storage and processing
+// BACS Payment Webhook Service
+// Handles BACS webhook storage and processing
 // Uses the same payment_webhooks table and simplified architecture as GOV.UK Pay
 // This service only stores webhooks to database with enqueued_at = NULL
 // The pay-callback-relay Lambda will poll and send to SQS
@@ -7,12 +7,12 @@
 import getLogger from '../utils/loggerHelper';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
-import { UKSBSWebhookPayload } from '../types/uksbsWebhook.types';
+import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 
 const logger = getLogger(module);
 const { ERROR_CODES } = require('../constants');
 
-interface UKSBSWebhookProcessingResult {
+interface BACSWebhookProcessingResult {
   success: boolean;
   isDuplicate: boolean;
   paymentId: string;
@@ -21,28 +21,28 @@ interface UKSBSWebhookProcessingResult {
 }
 
 /**
- * Process UKSBS webhook - simplified architecture
+ * Process BACS webhook - simplified architecture
  * 1. Store webhook in database with status='pending' and enqueued_at=NULL
  * 2. Return immediately (no SQS interaction)
  * 3. pay-callback-relay will poll and send to SQS
  * 
  * @param webhookId - Unique webhook identifier (event.eventId)
  * @param paymentId - Payment reference ID (payment.paymentReference)
- * @param event - Complete UKSBS webhook payload
+ * @param event - Complete BACS webhook payload
  * @param rawPayload - Raw webhook payload string (will be stored as JSONB)
  * @param correlationId - Correlation ID for tracing
  * @returns Processing result indicating success/duplicate/error
  */
-export async function processUKSBSWebhook(
+export async function processBACSWebhook(
   webhookId: string,
   paymentId: string,
-  event: UKSBSWebhookPayload,
+  event: BACSWebhookPayload,
   rawPayload: string,
   correlationId: string
-): Promise<UKSBSWebhookProcessingResult> {
+): Promise<BACSWebhookProcessingResult> {
   const startTime = Date.now();
 
-  logger.info('[UKSBSWebhookService] Processing UKSBS webhook', {
+  logger.info('[BACSWebhookService] Processing BACS webhook', {
     webhookId,
     paymentId,
     eventType: event.event.eventType,
@@ -52,7 +52,7 @@ export async function processUKSBSWebhook(
   });
 
   if (!config.features.callbackServiceEnabled) {
-    logger.warn('[UKSBSWebhookService] Callback service is disabled', {
+    logger.warn('[BACSWebhookService] Callback service is disabled', {
       webhookId,
       correlationId,
     });
@@ -71,7 +71,7 @@ export async function processUKSBSWebhook(
     try {
       payloadJson = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
     } catch (parseError) {
-      logger.error('[UKSBSWebhookService] Failed to parse raw payload', {
+      logger.error('[BACSWebhookService] Failed to parse raw payload', {
         webhookId,
         paymentId,
         error: parseError instanceof Error ? parseError.message : String(parseError),
@@ -87,15 +87,15 @@ export async function processUKSBSWebhook(
       webhook_id: webhookId,
       payment_id: paymentId,
       event_type: event.event.eventType,
-      status: 'pending',
+      status: event.detail.status, // Use actual status from webhook payload
       raw_payload: payloadJson,  // Stored as JSONB
-      created_by: 'uksbs-webhook-receiver',
+      created_by: 'BACS-webhook-receiver',
       correlation_id: correlationId,
     });
 
     // Check if this was a duplicate (returned by ON CONFLICT)
     if (createResult && createResult.isDuplicate) {
-      logger.info('[UKSBSWebhookService] Duplicate webhook detected', {
+      logger.info('[BACSWebhookService] Duplicate webhook detected', {
         webhookId,
         paymentId,
         previousStatus: createResult.status,
@@ -110,7 +110,7 @@ export async function processUKSBSWebhook(
     }
 
     const duration = Date.now() - startTime;
-    logger.info('[UKSBSWebhookService] UKSBS webhook stored successfully', {
+    logger.info('[BACSWebhookService] BACS webhook stored successfully', {
       webhookId,
       paymentId,
       eventType: event.event.eventType,
@@ -131,7 +131,7 @@ export async function processUKSBSWebhook(
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
-    logger.error('[UKSBSWebhookService] Error storing UKSBS webhook', {
+    logger.error('[BACSWebhookService] Error storing BACS webhook', {
       webhookId,
       paymentId,
       error: errorMessage,
@@ -152,10 +152,10 @@ export async function processUKSBSWebhook(
 }
 
 /**
- * Map UKSBS payment status to internal status
- * This can be extended to map UKSBS statuses to application-specific statuses
+ * Map BACS payment status to internal status
+ * This can be extended to map BACS statuses to application-specific statuses
  */
-export function mapUKSBSStatusToInternal(uksbsStatus: string): string {
+export function mapBACSStatusToInternal(BACSStatus: string): string {
   const statusMap: Record<string, string> = {
     'PAID': 'success',
     'PENDING': 'pending',
@@ -165,5 +165,5 @@ export function mapUKSBSStatusToInternal(uksbsStatus: string): string {
     'PARTIALLY_REFUNDED': 'partially_refunded',
   };
 
-  return statusMap[uksbsStatus] || 'unknown';
+  return statusMap[BACSStatus] || 'unknown';
 }
