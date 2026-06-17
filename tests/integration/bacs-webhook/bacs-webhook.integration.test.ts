@@ -207,7 +207,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Invalid signature');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'INVALID_SIGNATURE');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('2.2 Should reject webhook with missing signature header (401)', async () => {
@@ -224,7 +225,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Missing X-Webhook-Signature header');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'MISSING_SIGNATURE');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('2.3 Should reject webhook with malformed signature (non-hex) (401)', async () => {
@@ -242,7 +244,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Invalid signature format');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'INVALID_SIGNATURE_FORMAT');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('2.4 Should use constant-time comparison (timing attack protection)', async () => {
@@ -292,7 +295,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(422);
       expect(response.body).toHaveProperty('error', 'Schema validation failed');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'VALIDATION_ERROR');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('3.2 Should reject webhook with missing paymentReference (422)', async () => {
@@ -308,7 +312,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(422);
       expect(response.body).toHaveProperty('error', 'Schema validation failed');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'VALIDATION_ERROR');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('3.3 Should reject webhook with invalid currency code (422)', async () => {
@@ -324,7 +329,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(422);
       expect(response.body).toHaveProperty('error', 'Schema validation failed');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'VALIDATION_ERROR');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('3.4 Should reject webhook with empty body (400)', async () => {
@@ -339,7 +345,8 @@ describe('BACS Webhook Integration Tests', () => {
       // when rawBody is not set during JSON parsing. This is acceptable security behavior.
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
   });
 
@@ -364,7 +371,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Request timestamp expired or too far in future');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'TIMESTAMP_EXPIRED');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('4.2 Should reject webhook with future timestamp (401)', async () => {
@@ -383,7 +391,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Request timestamp expired or too far in future');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'TIMESTAMP_EXPIRED');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('4.3 Should reject webhook with missing timestamp header (401)', async () => {
@@ -400,7 +409,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Missing X-Request-Timestamp header');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'INVALID_TIMESTAMP');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('4.4 Should reject webhook with malformed timestamp (401)', async () => {
@@ -418,7 +428,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'X-Request-Timestamp must be a valid ISO 8601 datetime');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'INVALID_TIMESTAMP_FORMAT');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('4.5 Should validate timestamp format AFTER HMAC verification (security)', async () => {
@@ -573,7 +584,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error', 'Unsupported X-Webhook-Signature-Version');
-      expect(validateMinimalResponse(response.body, ['error'])).toBe(true);
+      expect(response.body).toHaveProperty('errorCode', 'UNSUPPORTED_VERSION');
+      expect(validateMinimalResponse(response.body, ['error', 'errorCode'])).toBe(true);
     });
 
     test('6.3 Should handle large payload amounts (edge of integer range)', async () => {

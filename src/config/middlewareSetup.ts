@@ -5,6 +5,8 @@ import { corsMiddleware } from './corsConfig';
 import { rateLimitMiddleware } from '../middlewares/rateLimiter';
 import { securityHeadersMiddleware } from '../middlewares/securityHeaders';
 import { requestLoggerMiddleware } from '../middlewares/requestLogger';
+import { requestContextMiddleware } from '../middlewares/requestContext';
+import { httpLoggingMiddleware } from '../middlewares/httpLogging';
 
 interface RequestWithRawBody extends Request {
   rawBody?: string;
@@ -16,6 +18,9 @@ interface RequestWithRawBody extends Request {
 export function registerMiddleware(app: Express): void {
   // Trust proxy (for rate limiting and IP detection)
   app.set('trust proxy', true);
+
+  // Request context (must be first to track all requests)
+  app.use(requestContextMiddleware);
 
   // CORS
   app.use(corsMiddleware);
@@ -33,8 +38,12 @@ export function registerMiddleware(app: Express): void {
       (req as RequestWithRawBody).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
     }
   }));
+  
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
-  // Request logging
+  // HTTP logging (after body parsing)
+  app.use(httpLoggingMiddleware);
+
+  // Legacy request logging (can be removed if not needed)
   app.use(requestLoggerMiddleware);
 }

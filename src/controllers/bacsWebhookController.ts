@@ -3,12 +3,17 @@ import { v4 as uuidv4 } from 'uuid';
 import getLogger from '../utils/loggerHelper';
 import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
-import { HTTP_STATUS } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
-import { 
-  getValidSignatureOrGenerateId, 
-  serializeWebhookPayload 
-} from '../utils/webhookUtils';
+import { getValidSignatureOrGenerateId, serializeWebhookPayload } from '../utils/webhookUtils';
+import {
+  HEADER_CORRELATION_ID,
+  OUTCOME_SUCCESS,
+  OUTCOME_DUPLICATE,
+  OUTCOME_ERROR_VALIDATION,
+  OUTCOME_ERROR_DATABASE,
+  OUTCOME_ERROR_INTERNAL,
+} from '../constants/bacs.constants';
 import {
   BACSWebhookResponse,
   buildSuccessResponse,
@@ -21,7 +26,6 @@ import {
 
 const logger = getLogger(module);
 
-// Type definitions
 interface BACSWebhookRequest extends Request {
   BACSWebhookEvent?: BACSWebhookPayload;
   paymentId?: string;
@@ -34,69 +38,36 @@ interface BACSWebhookProcessingResult {
   error?: string;
 }
 
-/**
- * Handle BACS webhook endpoint
- * POST /webhooks/bacs/payment
- * 
- * Responsibilities:
- * - Extract and validate webhook identifiers
- * - Delegate to service layer for business logic
- * - Return appropriate HTTP responses
- * 
- * Flow:
- * 1. Payload validation (completed by middleware before reaching this controller)
- * 2. Extract identifiers from BACS webhook structure
- * 3. Delegate to service layer to store webhook in database
- * 4. Return immediate HTTP response based on processing result
- * 
- * Note: Async processing is handled by separate Lambda (pay-callback-relay)
- */
 async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promise<Response> {
   const webhookEvent = req.BACSWebhookEvent;
   const paymentId = req.paymentId;
   
-  // Extract identifiers from BACS webhook structure
   const eventId = webhookEvent?.event?.eventId || uuidv4();
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
-  const correlationId = (req.headers['x-correlation-id'] as string) || uuidv4();
+  const correlationId = (req.headers[HEADER_CORRELATION_ID] as string) || uuidv4();
 
-  // Validate webhook event exists (should never fail due to middleware, but defensive check)
   if (!webhookEvent) {
-    const responseBody = buildValidationErrorResponse(
-      eventId,
-      deliveryId,
-      'Invalid webhook event structure'
-    );
-    
-    logger.error('[BACSWebhook] Invalid webhook event structure', {
+    logger.error('[BACSWebhook] Invalid event structure', {
       eventId,
       deliveryId,
       correlationId,
-      statusCode: HTTP_STATUS.ACCEPTED,
-      response: responseBody,
+      outcome: OUTCOME_ERROR_VALIDATION,
+      error_category: 'validation',
+      error_code: ERROR_CODES.INVALID_WEBHOOK_STRUCTURE,
     });
-    
-    return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
+    return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Invalid webhook event structure'));
   }
 
-  // Validate payment reference
   if (!paymentId || typeof paymentId !== 'string' || paymentId.length === 0) {
-    const responseBody = buildValidationErrorResponse(
+    logger.error('[BACSWebhook] Invalid payment reference', {
       eventId,
       deliveryId,
-      'Missing or invalid payment reference'
-    );
-    
-    logger.error('[BACSWebhook] Missing or invalid payment reference', {
-      eventId,
-      deliveryId,
-      eventType: webhookEvent.event.eventType,
       correlationId,
-      statusCode: HTTP_STATUS.ACCEPTED,
-      response: responseBody,
+      outcome: OUTCOME_ERROR_VALIDATION,
+      error_category: 'validation',
+      error_code: ERROR_CODES.INVALID_PAYMENT_ID,
     });
-    
-    return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
+    return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Missing or invalid payment reference'));
   }
 
   logger.info('[BACSWebhook] Webhook received', {
@@ -111,10 +82,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
   });
 
   try {
-    // Serialize payload for audit trail storage
     const rawPayload = serializeWebhookPayload(req.body);
-
-    // Delegate to service layer for business logic
     const result: BACSWebhookProcessingResult = await processBACSWebhook(
       eventId,
       paymentId,
@@ -123,169 +91,98 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       correlationId
     );
 
-    // Handle duplicate webhooks - idempotency (HTTP 200 signals partner to stop retrying)
     if (result.isDuplicate) {
-      const responseBody = buildDuplicateResponse(
+      logger.info('[BACSWebhook] Duplicate acknowledged', {
         eventId,
         deliveryId,
         paymentId,
-        correlationId
-      );
-      
-      logger.info('[BACSWebhook] Duplicate webhook acknowledged', {
-        eventId,
-        deliveryId,
-        paymentReference: paymentId,
         correlationId,
-        statusCode: HTTP_STATUS.OK,
-        response: responseBody,
+        outcome: OUTCOME_DUPLICATE,
+        status_code: HTTP_STATUS.OK,
+        is_duplicate: true,
+        error_code: ERROR_CODES.DUPLICATE_WEBHOOK,
       });
-
-      return res.status(HTTP_STATUS.OK).json(responseBody);
+      return res.status(HTTP_STATUS.OK).json(buildDuplicateResponse(correlationId));
     }
 
-    // Success: Webhook stored and queued for async processing (HTTP 202)
     if (result.success) {
-      const responseBody = buildSuccessResponse(
+      logger.info('[BACSWebhook] Webhook queued', {
         eventId,
         deliveryId,
         paymentId,
-        webhookEvent.event.eventType,
-        webhookEvent.detail.status,
-        correlationId
-      );
-      
-      logger.info('[BACSWebhook] Webhook acknowledged and queued', {
-        eventId,
-        deliveryId,
-        paymentReference: paymentId,
-        eventType: webhookEvent.event.eventType,
-        paymentStatus: webhookEvent.detail.status,
-        amount: webhookEvent.detail.amount,
-        currency: webhookEvent.detail.currency,
         correlationId,
-        statusCode: HTTP_STATUS.ACCEPTED,
-        response: responseBody,
+        outcome: OUTCOME_SUCCESS,
+        status_code: HTTP_STATUS.ACCEPTED,
+        is_duplicate: false,
       });
-
-      return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
+      return res.status(HTTP_STATUS.ACCEPTED).json(buildSuccessResponse(correlationId));
     }
 
-    // Retryable error (e.g., database temporarily unavailable) - HTTP 202 allows retry
     if (result.retryable) {
-      const responseBody = buildRetryableErrorResponse(
+      logger.warn('[BACSWebhook] Retryable error', {
         eventId,
         deliveryId,
         paymentId,
-        result.error || 'Unknown retryable error'
-      );
-      
-      logger.warn('[BACSWebhook] Webhook processing encountered retryable error', {
-        eventId,
-        deliveryId,
-        paymentReference: paymentId,
         error: result.error,
         correlationId,
-        statusCode: HTTP_STATUS.ACCEPTED,
-        response: responseBody,
+        outcome: OUTCOME_ERROR_DATABASE,
+        error_category: 'database',
+        error_code: ERROR_CODES.DATABASE_ERROR,
+        error_retryable: true,
+        status_code: HTTP_STATUS.ACCEPTED,
       });
-
-      return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
+      return res.status(HTTP_STATUS.ACCEPTED).json(buildRetryableErrorResponse(result.error || 'Unknown retryable error'));
     }
 
-    // Permanent failure (e.g., invalid event type, constraint violation) - HTTP 202 but DLQ
-    const responseBody = buildPermanentErrorResponse(
+    logger.error('[BACSWebhook] Permanent error', {
       eventId,
       deliveryId,
       paymentId,
-      result.error || 'Unknown permanent error'
-    );
-    
-    logger.error('[BACSWebhook] Webhook processing permanent error', {
-      eventId,
-      deliveryId,
-      paymentReference: paymentId,
       error: result.error,
       correlationId,
-      statusCode: HTTP_STATUS.ACCEPTED,
-      response: responseBody,
+      outcome: OUTCOME_ERROR_DATABASE,
+      error_category: 'database',
+      error_code: ERROR_CODES.DATABASE_ERROR,
+      error_retryable: false,
+      status_code: HTTP_STATUS.ACCEPTED,
     });
-
-    return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
-    
+    return res.status(HTTP_STATUS.ACCEPTED).json(buildPermanentErrorResponse(result.error || 'Unknown permanent error'));
   } catch (error) {
-    // Unexpected exception - log with stack trace and return generic error
-    const responseBody = buildUnexpectedErrorResponse(
-      eventId,
-      deliveryId,
-      paymentId
-    );
-    
-    logger.error('[BACSWebhook] Unexpected error processing webhook', {
+    logger.error('[BACSWebhook] Unexpected error', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       eventId,
       deliveryId,
-      paymentReference: paymentId,
+      paymentId,
       correlationId,
-      statusCode: HTTP_STATUS.ACCEPTED,
-      response: responseBody,
+      outcome: OUTCOME_ERROR_INTERNAL,
+      error_category: 'internal',
+      error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
+      status_code: HTTP_STATUS.ACCEPTED,
     });
-
-    return res.status(HTTP_STATUS.ACCEPTED).json(responseBody);
+    return res.status(HTTP_STATUS.ACCEPTED).json(buildUnexpectedErrorResponse());
   }
 }
 
-/**
- * Health check endpoint for BACS webhook service
- * GET /webhooks/bacs/health
- * 
- * Responsibilities:
- * - Check database connectivity
- * - Return service health status
- * 
- * Returns:
- * - 200 OK if all checks pass
- * - 503 Service Unavailable if any check fails
- */
 async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> {
-  interface HealthCheck {
-    status: 'healthy' | 'unhealthy';
-    service: string;
-    timestamp: string;
-    checks: {
-      database?: {
-        status: 'up' | 'down';
-        latency_ms?: number;
-        error?: string;
-      };
-    };
-  }
-  
-  const health: HealthCheck = {
-    status: 'healthy',
+  const health = {
+    status: 'healthy' as 'healthy' | 'unhealthy',
     service: 'bacs-webhook-receiver',
     timestamp: new Date().toISOString(),
-    checks: {},
+    checks: {} as any,
   };
 
-  // Check database connectivity
   try {
     const dbCheck = await checkDatabaseConnectivity();
     health.checks.database = {
       status: dbCheck.connected ? 'up' : 'down',
       latency_ms: dbCheck.latencyMs,
+      ...(dbCheck.error && { error: dbCheck.error }),
     };
-
-    if (dbCheck.error) {
-      health.checks.database.error = dbCheck.error;
-    }
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[BACSHealth] Database connectivity check failed', { 
-        error: dbCheck.error 
-      });
+      logger.error('[BACSHealth] Database down', { error: dbCheck.error });
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -294,9 +191,7 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[BACSHealth] Database check failed', { 
-      error: error instanceof Error ? error.message : String(error) 
-    });
+    logger.error('[BACSHealth] Check failed', { error: error instanceof Error ? error.message : String(error) });
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 

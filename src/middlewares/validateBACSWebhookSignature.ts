@@ -1,25 +1,34 @@
-// BACS Webhook Signature Verification Middleware
-// Verifies X-Webhook-Signature header for BACS webhook payloads
-// Implements HMAC-SHA256 signature verification per API spec
-
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import getLogger from '../utils/loggerHelper';
 import config from '../config/config';
-import { HTTP_STATUS } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
+import {
+  BACS_SIGNATURE_VERSION,
+  TIMESTAMP_WINDOW_MS,
+  ISO_8601_UTC_REGEX,
+  VALID_HEX_REGEX,
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_SIGNATURE_VERSION,
+  HEADER_REQUEST_TIMESTAMP,
+  HEADER_CORRELATION_ID,
+  ERROR_EMPTY_BODY,
+  ERROR_MISSING_SIGNATURE,
+  ERROR_INVALID_SIGNATURE_FORMAT,
+  ERROR_MISSING_TIMESTAMP,
+  ERROR_UNSUPPORTED_VERSION,
+  ERROR_INVALID_SIGNATURE,
+  ERROR_INVALID_TIMESTAMP_FORMAT,
+  ERROR_TIMESTAMP_EXPIRED,
+  ERROR_INTERNAL,
+  DEFAULT_CORRELATION_ID,
+  ERROR_CATEGORY_AUTHENTICATION,
+  ERROR_CATEGORY_VALIDATION,
+  ERROR_CATEGORY_INTERNAL,
+} from '../constants/bacs.constants';
 
 const logger = getLogger(module);
 
-// ISO 8601 UTC datetime format validation
-const ISO_8601_UTC_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
-// Valid hexadecimal string (lowercase)
-const VALID_HEX_REGEX = /^[0-9a-f]+$/;
-
-/**
- * Verify BACS webhook signature using HMAC-SHA256
- * Signature is computed over: timestamp + "." + rawBody
- * Uses constant-time comparison to prevent timing attacks
- */
 function verifyBACSSignature(
   signature: string,
   timestamp: string,
@@ -27,25 +36,19 @@ function verifyBACSSignature(
   signingSecret: string
 ): boolean {
   try {
-    // Construct signed message: timestamp + "." + body
-    const signedMessage = timestamp + '.' + body;
-    
-    // Compute HMAC-SHA256
+    const signedMessage = `${timestamp}.${body}`;
     const expectedSignature = crypto
       .createHmac('sha256', signingSecret)
       .update(signedMessage, 'utf-8')
       .digest('hex');
 
-    // Convert to buffers for constant-time comparison
     const expectedBuf = Buffer.from(expectedSignature, 'hex');
     const receivedBuf = Buffer.from(signature, 'hex');
     
-    // Length check before constant-time compare (prevents timing leak via exception)
     if (expectedBuf.length !== receivedBuf.length) {
       return false;
     }
     
-    // Constant-time comparison prevents timing attacks
     return crypto.timingSafeEqual(expectedBuf, receivedBuf);
   } catch (error) {
     logger.error('[BACSWebhook] Signature verification error', {
@@ -55,159 +58,149 @@ function verifyBACSSignature(
   }
 }
 
-/**
- * Express middleware for BACS webhook signature validation
- */
 export function validateBACSWebhookSignatureMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
 ): Response | void {
-  const correlationId = req.headers['x-correlation-id'] || 'unknown';
+  const correlationId = req.headers[HEADER_CORRELATION_ID] || DEFAULT_CORRELATION_ID;
 
-  // Check if signature verification is enabled
   if (!config.features.signatureVerificationEnabled) {
-    logger.info('[BACSWebhook] Signature verification is disabled - skipping validation', {
-      correlationId,
-    });
+    logger.info('[BACSWebhook] Signature verification disabled', { correlationId });
     return next();
   }
 
-  // Extract required headers
-  const signatureHeader = req.headers['x-webhook-signature'];
+  const signatureHeader = req.headers[HEADER_WEBHOOK_SIGNATURE];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
   
-  const timestampHeader = req.headers['x-request-timestamp'];
+  const timestampHeader = req.headers[HEADER_REQUEST_TIMESTAMP];
   const timestamp = Array.isArray(timestampHeader) ? timestampHeader[0] : timestampHeader;
   
-  const versionHeader = req.headers['x-webhook-signature-version'];
+  const versionHeader = req.headers[HEADER_SIGNATURE_VERSION];
   const version = Array.isArray(versionHeader) ? versionHeader[0] : versionHeader;
 
-  // ── 1. Empty body guard (before any crypto operations) ────────────────────
   const rawBody = (req as any).rawBody || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
   
   if (!rawBody || rawBody.length === 0) {
     logger.warn('[BACSWebhook] Empty request body', {
       correlationId,
+      error_category: ERROR_CATEGORY_VALIDATION,
+      error_code: ERROR_CODES.EMPTY_BODY,
     });
-
-    return res.status(HTTP_STATUS.BAD_REQUEST).json({
-      error: 'Empty body',
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
+      error: ERROR_EMPTY_BODY,
+      errorCode: ERROR_CODES.EMPTY_BODY,
     });
   }
-
-  // ── 2. Signature presence check ───────────────────────────────────────────
   if (!signature) {
-    logger.warn('[BACSWebhook] Missing X-Webhook-Signature header', {
+    logger.warn('[BACSWebhook] Missing signature', {
       correlationId,
-      headers: Object.keys(req.headers),
+      error_category: ERROR_CATEGORY_AUTHENTICATION,
+      error_code: ERROR_CODES.MISSING_SIGNATURE,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Missing X-Webhook-Signature header',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_MISSING_SIGNATURE,
+      errorCode: ERROR_CODES.MISSING_SIGNATURE,
     });
   }
 
-  // ── 3. Hex format validation (before buffer conversion) ───────────────────
   const normalizedSignature = signature.trim().toLowerCase();
   if (!VALID_HEX_REGEX.test(normalizedSignature)) {
-    logger.warn('[BACSWebhook] Invalid signature format - not hexadecimal', {
+    logger.warn('[BACSWebhook] Invalid signature format', {
       correlationId,
-      signaturePrefix: signature.substring(0, 10) + '...',
+      error_category: ERROR_CATEGORY_AUTHENTICATION,
+      error_code: ERROR_CODES.INVALID_SIGNATURE_FORMAT,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Invalid signature format',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_INVALID_SIGNATURE_FORMAT,
+      errorCode: ERROR_CODES.INVALID_SIGNATURE_FORMAT,
     });
   }
 
-  // ── 4. Timestamp presence check (public requirement) ─────────────────────
   if (!timestamp) {
-    logger.warn('[BACSWebhook] Missing X-Request-Timestamp header', {
+    logger.warn('[BACSWebhook] Missing timestamp', {
       correlationId,
+      error_category: ERROR_CATEGORY_AUTHENTICATION,
+      error_code: ERROR_CODES.INVALID_TIMESTAMP,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Missing X-Request-Timestamp header',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_MISSING_TIMESTAMP,
+      errorCode: ERROR_CODES.INVALID_TIMESTAMP,
     });
   }
 
-  // ── 5. Version check (public knowledge - before HMAC) ────────────────────
-  if (version !== 'v1') {
-    logger.warn('[BACSWebhook] Invalid or missing X-Webhook-Signature-Version', {
+  if (version !== BACS_SIGNATURE_VERSION) {
+    logger.warn('[BACSWebhook] Invalid version', {
       correlationId,
       version,
+      error_category: ERROR_CATEGORY_VALIDATION,
+      error_code: ERROR_CODES.UNSUPPORTED_VERSION,
     });
-
-    return res.status(HTTP_STATUS.BAD_REQUEST).json({
-      error: 'Unsupported X-Webhook-Signature-Version',
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
+      error: ERROR_UNSUPPORTED_VERSION,
+      errorCode: ERROR_CODES.UNSUPPORTED_VERSION,
     });
   }
 
-  // ── 6. Get signing secret ────────────────────────────────────────────────
   const signingSecret = config.bacsWebhookConfig.signingKey;
-
   if (!signingSecret) {
-    logger.error('[BACSWebhook] BACS signing secret not configured', {
+    logger.error('[BACSWebhook] Signing secret not configured', {
       correlationId,
+      error_category: ERROR_CATEGORY_INTERNAL,
+      error_code: ERROR_CODES.CONFIGURATION_ERROR,
     });
-
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: 'Internal error — please retry',
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
+      error: ERROR_INTERNAL,
+      errorCode: ERROR_CODES.CONFIGURATION_ERROR,
     });
   }
 
-  // ── 7. HMAC signature verification (constant-time) ───────────────────────
   const isValid = verifyBACSSignature(normalizedSignature, timestamp, rawBody, signingSecret);
-
   if (!isValid) {
-    logger.warn('[BACSWebhook] Invalid X-Webhook-Signature', {
+    logger.warn('[BACSWebhook] Invalid signature', {
       correlationId,
-      signatureProvided: signature.substring(0, 10) + '...',
       timestamp,
       bodyLength: rawBody.length,
+      error_category: ERROR_CATEGORY_AUTHENTICATION,
+      error_code: ERROR_CODES.INVALID_SIGNATURE,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Invalid signature',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_INVALID_SIGNATURE,
+      errorCode: ERROR_CODES.INVALID_SIGNATURE,
     });
   }
 
-  // ── 8. Timestamp format validation (AFTER HMAC - prevents probing) ───────
   if (!ISO_8601_UTC_REGEX.test(timestamp)) {
     logger.warn('[BACSWebhook] Invalid timestamp format', {
       correlationId,
       timestamp,
+      error_category: ERROR_CATEGORY_VALIDATION,
+      error_code: ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'X-Request-Timestamp must be a valid ISO 8601 datetime',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_INVALID_TIMESTAMP_FORMAT,
+      errorCode: ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
     });
   }
 
-  // ── 9. Timestamp expiry check (AFTER HMAC - prevents window probing) ─────
   const requestTime = new Date(timestamp).getTime();
   const now = Date.now();
   const timeDiff = Math.abs(now - requestTime);
-  const maxTimeDiff = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-  if (isNaN(requestTime) || timeDiff > maxTimeDiff) {
-    logger.warn('[BACSWebhook] Timestamp outside acceptable window', {
+  if (isNaN(requestTime) || timeDiff > TIMESTAMP_WINDOW_MS) {
+    logger.warn('[BACSWebhook] Timestamp outside window', {
       correlationId,
       timestamp,
       timeDiffSeconds: isNaN(requestTime) ? 'invalid' : timeDiff / 1000,
+      error_category: ERROR_CATEGORY_AUTHENTICATION,
+      error_code: ERROR_CODES.TIMESTAMP_EXPIRED,
     });
-
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      error: 'Request timestamp expired or too far in future',
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ 
+      error: ERROR_TIMESTAMP_EXPIRED,
+      errorCode: ERROR_CODES.TIMESTAMP_EXPIRED,
     });
   }
 
-  logger.info('[BACSWebhook] X-Webhook-Signature validated successfully', {
-    correlationId,
-    timestamp,
-    eventId: req.body?.event?.eventId,
-  });
-
+  logger.info('[BACSWebhook] Signature validated', { correlationId, timestamp, eventId: req.body?.event?.eventId });
   next();
 }

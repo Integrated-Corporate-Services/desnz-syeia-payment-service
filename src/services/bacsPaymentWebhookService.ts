@@ -1,13 +1,12 @@
-// BACS Payment Webhook Service
-// Handles BACS webhook storage and processing
-// Uses the same payment_webhooks table and simplified architecture as GOV.UK Pay
-// This service only stores webhooks to database with enqueued_at = NULL
-// The pay-callback-relay Lambda will poll and send to SQS
-
 import getLogger from '../utils/loggerHelper';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
+import {
+  WEBHOOK_CREATOR,
+  ERROR_CATEGORY_DATABASE,
+  ERROR_CATEGORY_CONFIGURATION,
+} from '../constants/bacs.constants';
 
 const logger = getLogger(module);
 const { ERROR_CODES } = require('../constants');
@@ -20,19 +19,6 @@ interface BACSWebhookProcessingResult {
   errorCode?: string;
 }
 
-/**
- * Process BACS webhook - simplified architecture
- * 1. Store webhook in database with status='pending' and enqueued_at=NULL
- * 2. Return immediately (no SQS interaction)
- * 3. pay-callback-relay will poll and send to SQS
- * 
- * @param webhookId - Unique webhook identifier (event.eventId)
- * @param paymentId - Payment reference ID (payment.paymentReference)
- * @param event - Complete BACS webhook payload
- * @param rawPayload - Raw webhook payload string (will be stored as JSONB)
- * @param correlationId - Correlation ID for tracing
- * @returns Processing result indicating success/duplicate/error
- */
 export async function processBACSWebhook(
   webhookId: string,
   paymentId: string,
@@ -55,6 +41,8 @@ export async function processBACSWebhook(
     logger.warn('[BACSWebhookService] Callback service is disabled', {
       webhookId,
       correlationId,
+      error_category: ERROR_CATEGORY_CONFIGURATION,
+      error_code: ERROR_CODES.CONFIGURATION_ERROR,
     });
     return {
       success: false,
@@ -66,79 +54,53 @@ export async function processBACSWebhook(
   }
 
   try {
-    // Parse rawPayload to JSONB format
-    let payloadJson: any;
-    try {
-      payloadJson = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
-    } catch (parseError) {
-      logger.error('[BACSWebhookService] Failed to parse raw payload', {
-        webhookId,
-        paymentId,
-        error: parseError instanceof Error ? parseError.message : String(parseError),
-        correlationId,
-      });
-      payloadJson = rawPayload; // Store as-is if parsing fails
-    }
+    const payloadJson = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
 
-    // Store webhook in database with ON CONFLICT for idempotency
-    // Using same payment_webhooks table structure
-    // enqueued_at will be NULL until pay-callback-relay sends to SQS
     const createResult = await paymentWebhookRepository.createWebhook({
       webhook_id: webhookId,
       payment_id: paymentId,
       event_type: event.event.eventType,
-      status: event.detail.status, // Use actual status from webhook payload
-      raw_payload: payloadJson,  // Stored as JSONB
-      created_by: 'BACS-webhook-receiver',
+      status: event.detail.status,
+      raw_payload: payloadJson,
+      created_by: WEBHOOK_CREATOR,
       correlation_id: correlationId,
     });
 
-    // Check if this was a duplicate (returned by ON CONFLICT)
     if (createResult && createResult.isDuplicate) {
-      logger.info('[BACSWebhookService] Duplicate webhook detected', {
+      logger.info('[BACSWebhookService] Duplicate detected', {
         webhookId,
         paymentId,
-        previousStatus: createResult.status,
         correlationId,
+        is_duplicate: true,
       });
-
-      return {
-        success: true,
-        isDuplicate: true,
-        paymentId,
-      };
+      return { success: true, isDuplicate: true, paymentId };
     }
 
     const duration = Date.now() - startTime;
-    logger.info('[BACSWebhookService] BACS webhook stored successfully', {
+    logger.info('[BACSWebhookService] Webhook stored', {
       webhookId,
       paymentId,
       eventType: event.event.eventType,
-      paymentStatus: event.detail.status,
-      amount: event.detail.amount,
-      currency: event.detail.currency,
+      status: event.detail.status,
       duration,
       correlationId,
-      note: 'Webhook will be polled by pay-callback-relay',
+      is_duplicate: false,
     });
 
-    return {
-      success: true,
-      isDuplicate: false,
-      paymentId,
-    };
+    return { success: true, isDuplicate: false, paymentId };
   } catch (error: any) {
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
-    logger.error('[BACSWebhookService] Error storing BACS webhook', {
+    logger.error('[BACSWebhookService] Error storing webhook', {
       webhookId,
       paymentId,
       error: errorMessage,
       code: error.code,
-      stack: error.stack,
       duration,
       correlationId,
+      error_category: ERROR_CATEGORY_DATABASE,
+      error_code: error.code || ERROR_CODES.DATABASE_ERROR,
     });
 
     return {

@@ -1,8 +1,3 @@
-/**
- * BACS Webhook Payload Validator
- * Validates incoming BACS webhook payloads against specification
- */
-
 import { Request, Response, NextFunction } from 'express';
 import {
   BACSWebhookPayload,
@@ -13,60 +8,68 @@ import {
   BACS_CURRENCY_CODES,
   isBACSWebhookPayload,
 } from '../types/bacsWebhook.types';
-import { HTTP_STATUS } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
 import getLogger from '../utils/loggerHelper';
+import {
+  ISO_8601_DATE_REGEX,
+  DATE_REGEX,
+  UUID_V4_REGEX,
+  EVENT_VERSION_REGEX,
+  HEADER_CORRELATION_ID,
+  DEFAULT_CORRELATION_ID,
+  SUPPORTED_EVENT_VERSION,
+  ERROR_PAYLOAD_REQUIRED,
+  ERROR_PAYLOAD_STRUCTURE,
+  ERROR_SCHEMA_VALIDATION_FAILED,
+  ERROR_EVENT_REQUIRED,
+  ERROR_EVENT_ID_INVALID_UUID,
+  ERROR_EVENT_TYPE_INVALID,
+  ERROR_OCCURRED_AT_INVALID,
+  ERROR_EVENT_VERSION_FORMAT,
+  ERROR_EVENT_VERSION_UNSUPPORTED,
+  ERROR_CALLBACK_INVALID,
+  ERROR_DELIVERY_ID_INVALID,
+  ERROR_DELIVERY_ID_UUID,
+  ERROR_ATTEMPT_NUMBER_INVALID,
+  ERROR_ATTEMPT_NUMBER_POSITIVE,
+  ERROR_PAYMENT_REQUIRED,
+  ERROR_PAYMENT_REFERENCE_LENGTH,
+  ERROR_DETAIL_REQUIRED,
+  ERROR_STATUS_INVALID,
+  ERROR_AMOUNT_POSITIVE,
+  ERROR_AMOUNT_INTEGER,
+  ERROR_CURRENCY_INVALID,
+  ERROR_PAYMENT_DATE_FORMAT,
+  ERROR_TRANSFER_REFERENCE_INVALID,
+} from '../constants/bacs.constants';
 
 const logger = getLogger(module);
 
-/**
- * Validate complete BACS webhook payload
- */
 export function validateBACSWebhookPayload(payload: any): BACSValidationResult {
   const errors: BACSValidationError[] = [];
 
-  // Check if payload exists
   if (!payload || typeof payload !== 'object') {
-    return {
-      valid: false,
-      errors: [{ field: 'payload', message: 'Payload is required and must be an object' }],
-    };
+    return { valid: false, errors: [{ field: 'payload', message: ERROR_PAYLOAD_REQUIRED }] };
   }
 
-  // Type guard check
   if (!isBACSWebhookPayload(payload)) {
-    errors.push({
-      field: 'payload',
-      message: 'Payload structure does not match BACS webhook format',
-    });
-    return { valid: false, errors };
+    return { valid: false, errors: [{ field: 'payload', message: ERROR_PAYLOAD_STRUCTURE }] };
   }
 
-  // Validate event section
   validateEventSection(payload.event, errors);
 
-  // Validate callback section (optional)
   if (payload.callback !== undefined) {
     validateCallbackSection(payload.callback, errors);
   }
 
-  // Validate payment section
   validatePaymentSection(payload.payment, errors);
-
-  // Validate detail section
   validateDetailSection(payload.detail, errors);
 
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  return { valid: errors.length === 0, errors };
 }
-
-/**
- * Validate event section
- */
 function validateEventSection(event: any, errors: BACSValidationError[]): void {
   if (!event || typeof event !== 'object') {
-    errors.push({ field: 'event', message: 'event section is required and must be an object' });
+    errors.push({ field: 'event', message: ERROR_EVENT_REQUIRED });
     return;
   }
 
@@ -82,7 +85,7 @@ function validateEventSection(event: any, errors: BACSValidationError[]): void {
     if (!isValidUUID(event.eventId)) {
       errors.push({
         field: 'event.eventId',
-        message: 'eventId must be a valid UUID',
+        message: ERROR_EVENT_ID_INVALID_UUID,
         value: event.eventId,
       });
     }
@@ -94,7 +97,7 @@ function validateEventSection(event: any, errors: BACSValidationError[]): void {
     if (!validEventTypes.includes(event.eventType as any)) {
       errors.push({
         field: 'event.eventType',
-        message: `Invalid eventType. Must be one of: ${validEventTypes.join(', ')}`,
+        message: ERROR_EVENT_TYPE_INVALID,
         value: event.eventType,
       });
     }
@@ -105,24 +108,23 @@ function validateEventSection(event: any, errors: BACSValidationError[]): void {
     if (!isValidISODate(event.occurredAt)) {
       errors.push({
         field: 'event.occurredAt',
-        message: 'occurredAt must be a valid ISO 8601 date string',
+        message: ERROR_OCCURRED_AT_INVALID,
         value: event.occurredAt,
       });
     }
   }
 
-  // Validate eventVersion format and value (must be "1.0")
   if (event.eventVersion && typeof event.eventVersion === 'string') {
-    if (!/^\d+\.\d+$/.test(event.eventVersion)) {
+    if (!EVENT_VERSION_REGEX.test(event.eventVersion)) {
       errors.push({
         field: 'event.eventVersion',
-        message: 'eventVersion must be in format "X.Y" (e.g., "1.0")',
+        message: ERROR_EVENT_VERSION_FORMAT,
         value: event.eventVersion,
       });
-    } else if (event.eventVersion !== '1.0') {
+    } else if (event.eventVersion !== SUPPORTED_EVENT_VERSION) {
       errors.push({
         field: 'event.eventVersion',
-        message: 'Only eventVersion "1.0" is supported',
+        message: ERROR_EVENT_VERSION_UNSUPPORTED,
         value: event.eventVersion,
       });
     }
@@ -136,7 +138,7 @@ function validateCallbackSection(callback: any, errors: BACSValidationError[]): 
   if (!callback || typeof callback !== 'object') {
     errors.push({
       field: 'callback',
-      message: 'callback must be an object if present',
+      message: ERROR_CALLBACK_INVALID,
     });
     return;
   }
@@ -146,7 +148,7 @@ function validateCallbackSection(callback: any, errors: BACSValidationError[]): 
     if (typeof callback.deliveryId !== 'string' || callback.deliveryId.trim().length === 0) {
       errors.push({
         field: 'callback.deliveryId',
-        message: 'deliveryId must be a non-empty string if present',
+        message: ERROR_DELIVERY_ID_INVALID,
         value: callback.deliveryId,
       });
     }
@@ -156,7 +158,7 @@ function validateCallbackSection(callback: any, errors: BACSValidationError[]): 
     if (typeof callback.attemptNumber !== 'number') {
       errors.push({
         field: 'callback.attemptNumber',
-        message: 'attemptNumber must be a number if present',
+        message: ERROR_ATTEMPT_NUMBER_INVALID,
         value: callback.attemptNumber,
       });
     }
@@ -167,7 +169,7 @@ function validateCallbackSection(callback: any, errors: BACSValidationError[]): 
     if (!isValidUUID(callback.deliveryId)) {
       errors.push({
         field: 'callback.deliveryId',
-        message: 'deliveryId must be a valid UUID if present',
+        message: ERROR_DELIVERY_ID_UUID,
         value: callback.deliveryId,
       });
     }
@@ -178,7 +180,7 @@ function validateCallbackSection(callback: any, errors: BACSValidationError[]): 
     if (!Number.isInteger(callback.attemptNumber) || callback.attemptNumber < 1) {
       errors.push({
         field: 'callback.attemptNumber',
-        message: 'attemptNumber must be a positive integer >= 1 if present',
+        message: ERROR_ATTEMPT_NUMBER_POSITIVE,
         value: callback.attemptNumber,
       });
     }
@@ -192,7 +194,7 @@ function validatePaymentSection(payment: any, errors: BACSValidationError[]): vo
   if (!payment || typeof payment !== 'object') {
     errors.push({
       field: 'payment',
-      message: 'payment section is required and must be an object',
+      message: ERROR_PAYMENT_REQUIRED,
     });
     return;
   }
@@ -205,7 +207,7 @@ function validatePaymentSection(payment: any, errors: BACSValidationError[]): vo
     if (payment.paymentReference.length === 0 || payment.paymentReference.length > 100) {
       errors.push({
         field: 'payment.paymentReference',
-        message: 'paymentReference must be between 1 and 100 characters',
+        message: ERROR_PAYMENT_REFERENCE_LENGTH,
         value: payment.paymentReference,
       });
     }
@@ -219,7 +221,7 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
   if (!detail || typeof detail !== 'object') {
     errors.push({
       field: 'detail',
-      message: 'detail section is required and must be an object',
+      message: ERROR_DETAIL_REQUIRED,
     });
     return;
   }
@@ -235,7 +237,7 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
     if (typeof detail.transferReference !== 'string' || detail.transferReference.trim().length === 0) {
       errors.push({
         field: 'detail.transferReference',
-        message: 'transferReference must be a non-empty string if present',
+        message: ERROR_TRANSFER_REFERENCE_INVALID,
         value: detail.transferReference,
       });
     }
@@ -247,7 +249,7 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
     if (!validStatuses.includes(detail.status as any)) {
       errors.push({
         field: 'detail.status',
-        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        message: ERROR_STATUS_INVALID,
         value: detail.status,
       });
     }
@@ -258,14 +260,14 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
     if (detail.amount <= 0) {
       errors.push({
         field: 'detail.amount',
-        message: 'amount must be a positive number (in pence)',
+        message: ERROR_AMOUNT_POSITIVE,
         value: detail.amount,
       });
     }
     if (!Number.isInteger(detail.amount)) {
       errors.push({
         field: 'detail.amount',
-        message: 'amount must be an integer (pence)',
+        message: ERROR_AMOUNT_INTEGER,
         value: detail.amount,
       });
     }
@@ -277,7 +279,7 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
     if (!validCurrencies.includes(detail.currency as any)) {
       errors.push({
         field: 'detail.currency',
-        message: `Invalid currency. Must be one of: ${validCurrencies.join(', ')}`,
+        message: ERROR_CURRENCY_INVALID,
         value: detail.currency,
       });
     }
@@ -288,7 +290,7 @@ function validateDetailSection(detail: any, errors: BACSValidationError[]): void
     if (!isValidDateFormat(detail.paymentDate)) {
       errors.push({
         field: 'detail.paymentDate',
-        message: 'paymentDate must be in format YYYY-MM-DD',
+        message: ERROR_PAYMENT_DATE_FORMAT,
         value: detail.paymentDate,
       });
     }
@@ -343,63 +345,49 @@ function validateRequiredNumber(
   }
 }
 
-/**
- * Helper: Check if string is valid ISO 8601 date
- */
 function isValidISODate(dateString: string): boolean {
-  const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
-  if (!isoDateRegex.test(dateString)) {
+  if (!ISO_8601_DATE_REGEX.test(dateString)) {
     return false;
   }
   const date = new Date(dateString);
   return !isNaN(date.getTime());
 }
 
-/**
- * Helper: Check if string is valid date format (YYYY-MM-DD)
- */
 function isValidDateFormat(dateString: string): boolean {
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(dateString)) {
+  if (!DATE_REGEX.test(dateString)) {
     return false;
   }
   const date = new Date(dateString);
   return !isNaN(date.getTime());
 }
 
-/**
- * Helper: Check if string is valid UUID
- */
 function isValidUUID(uuid: string): boolean {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
+  return UUID_V4_REGEX.test(uuid);
 }
 
-/**
- * Express middleware for BACS webhook payload validation
- */
 export function validateBACSWebhookPayloadMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
 ): Response | void {
-  const correlationId = req.headers['x-correlation-id'] || 'unknown';
+  const correlationId = req.headers[HEADER_CORRELATION_ID] || DEFAULT_CORRELATION_ID;
 
-  // Validate payload
   const validationResult = validateBACSWebhookPayload(req.body);
 
   if (!validationResult.valid) {
     logger.warn('[BACSWebhook] Payload validation failed', {
       correlationId,
       errors: validationResult.errors,
+      error_category: 'validation',
+      error_code: ERROR_CODES.VALIDATION_ERROR,
     });
 
     // Return 422 for schema validation failures (non-retryable)
     // Per Partner spec: minimal error response, detailed errors are logged
     // This signals to partner to stop retrying (circuit-breaker for version changes)
     return res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
-      error: 'Schema validation failed',
+      error: ERROR_SCHEMA_VALIDATION_FAILED,
+      errorCode: ERROR_CODES.VALIDATION_ERROR,
     });
   }
 

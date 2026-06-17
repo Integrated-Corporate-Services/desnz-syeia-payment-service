@@ -1,6 +1,8 @@
 // Logger utility with Winston and file transports (matching backend patterns)
 import { createLogger, format, transports, Logger as WinstonLogger } from 'winston';
 import config from '../config/config';
+import { getRequestContext } from '../middlewares/requestContext';
+import { getECSMetadataSync } from './ecsMetadata';
 
 interface LogData {
   [key: string]: unknown;
@@ -17,7 +19,12 @@ const isCloudEnv = ['prod', 'production', 'pre-prod', 'staging', 'dev', 'develop
   process.env.NODE_ENV || ''
 );
 
+const isProdEnv = ['prod', 'production'].includes(process.env.NODE_ENV || '');
+
 const logLevel = config.server?.logLevel || process.env.LOG_LEVEL || (isCloudEnv ? 'info' : 'debug');
+
+// Cache ECS metadata on startup (avoid repeated calls)
+const ecsMetadata = getECSMetadataSync();
 
 // Create Winston logger instance
 const winstonLogger: WinstonLogger = createLogger({
@@ -56,6 +63,74 @@ if (isCloudEnv) {
       })
     ),
   }));
+}
+
+/**
+ * Filter sensitive fields based on environment
+ * In production: Hide detailed technical info
+ * In lower environments: Show everything for debugging
+ */
+function filterByEnvironment(data: Record<string, unknown>): Record<string, unknown> {
+  if (!isProdEnv) {
+    // Lower environments: show everything
+    return data;
+  }
+
+  // Production: Remove potentially sensitive technical details
+  const filtered = { ...data };
+  const prodExcludedFields = [
+    'stack',           // Don't log stack traces in prod
+    'query',           // Don't log query strings
+    'headers',         // Don't log all headers
+    'user_agent',      // Don't log full user agent in prod
+    'source_ip',       // Don't log source IPs in prod (privacy)
+  ];
+
+  for (const field of prodExcludedFields) {
+    if (field in filtered) {
+      delete filtered[field];
+    }
+  }
+
+  return filtered;
+}
+
+/**
+ * Enrich log data with request context and ECS metadata
+ */
+function enrichLogData(data: LogData, moduleName: string): Record<string, unknown> {
+  // Get request context (if available)
+  const context = getRequestContext();
+
+  // Start with base log data
+  let enriched: Record<string, unknown> = {
+    module: moduleName,
+    ...data,
+  };
+
+  // Add request context if available
+  if (context) {
+    enriched = {
+      ...enriched,
+      request_id: context.request_id,
+      method: context.method,
+      path: context.path,
+      correlation_id: context.correlation_id,
+      // Add these only in lower environments
+      ...(isProdEnv ? {} : {
+        user_agent: context.user_agent,
+        source_ip: context.source_ip,
+      }),
+    };
+  }
+
+  // Add ECS metadata (only non-empty fields)
+  if (ecsMetadata.ecs_task_id) enriched.ecs_task_id = ecsMetadata.ecs_task_id;
+  if (ecsMetadata.ecs_service) enriched.ecs_service = ecsMetadata.ecs_service;
+  if (ecsMetadata.ecs_cluster) enriched.ecs_cluster = ecsMetadata.ecs_cluster;
+  if (ecsMetadata.aws_region) enriched.aws_region = ecsMetadata.aws_region;
+
+  return enriched;
 }
 
 /**
@@ -109,24 +184,32 @@ function sanitizeData(data: unknown): unknown {
 }
 
 function getLogger(module: NodeModule): Logger {
-  const moduleName = module.filename ? module.filename.split(/[/\\]/).pop() : 'unknown';
+  const moduleName = module.filename ? module.filename.split(/[/\\]/).pop() || 'unknown' : 'unknown';
 
   return {
     info: (message: string, data: LogData = {}): void => {
-      const sanitizedData = sanitizeData(data) as Record<string, unknown>;
-      winstonLogger.info(message, { module: moduleName, ...sanitizedData });
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.info(message, sanitizedData);
     },
     error: (message: string, data: LogData = {}): void => {
-      const sanitizedData = sanitizeData(data) as Record<string, unknown>;
-      winstonLogger.error(message, { module: moduleName, ...sanitizedData });
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.error(message, sanitizedData);
     },
     warn: (message: string, data: LogData = {}): void => {
-      const sanitizedData = sanitizeData(data) as Record<string, unknown>;
-      winstonLogger.warn(message, { module: moduleName, ...sanitizedData });
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.warn(message, sanitizedData);
     },
     debug: (message: string, data: LogData = {}): void => {
-      const sanitizedData = sanitizeData(data) as Record<string, unknown>;
-      winstonLogger.debug(message, { module: moduleName, ...sanitizedData });
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.debug(message, sanitizedData);
     },
   };
 }
