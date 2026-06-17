@@ -182,7 +182,6 @@ export const featureFlags = {
 const isProduction = process.env.NODE_ENV === 'production';
 
 export const securityConfig = {
-  sessionSecret: getConfigValue('SESSION_SECRET'),
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
   trustedProxies: getConfigValue('TRUSTED_PROXIES', '').split(',').filter(Boolean),
 };
@@ -201,6 +200,10 @@ function validateConfig(): void {
 
   if (!webhookConfig.signingKey) {
     errors.push('GOVPAY_WEBHOOK_SIGNING_KEY is required');
+  }
+
+  if (!bacsWebhookConfig.signingKey) {
+    errors.push('UKSBS_WEBHOOK_SIGNING_KEY is required');
   }
 
   if (!govPayConfig.apiKey) {
