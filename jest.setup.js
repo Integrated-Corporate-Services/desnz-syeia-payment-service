@@ -10,9 +10,10 @@ process.env.DB_NAME = 'test_db';
 process.env.DB_USER = 'test_user';
 process.env.DB_PASSWORD = 'test_password';
 process.env.PGSSLMODE = 'disable';
-process.env.GOVPAY_WEBHOOK_SIGNING_KEY = '';
-process.env.GOVPAY_API_KEY = 'test-api-key-for-unit-tests';
-process.env.WEBHOOK_SIGNING_KEY = 'test-signing-key-for-unit-tests-12345678';
+// codeql[js/hardcoded-credentials] - Intentional test credentials
+process.env.GOVPAY_WEBHOOK_SIGNING_KEY = 'test-govpay-signing-key-for-tests-12345678';  // ✅ Used in GovPay webhook validation
+process.env.GOVPAY_API_KEY = 'test-govpay-api-key-not-real-value';                      // ✅ Used in GovPay API service
+process.env.UKSBS_WEBHOOK_SIGNING_KEY = 'test-uksbs-signing-key-for-tests-12345678';    // ✅ Used in BACS webhook tests (47 tests)
 process.env.BACKEND_SERVICE_URL = 'http://localhost:3000';
 process.env.LOG_LEVEL = 'error'; // Reduce log noise during tests
 process.env.CALLBACK_SERVICE_ENABLED = 'true';
