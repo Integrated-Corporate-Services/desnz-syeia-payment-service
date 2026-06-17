@@ -178,7 +178,7 @@ describe('Webhook Integration Tests - New Architecture', () => {
       );
 
       expect(dbResult.rows).toHaveLength(5);
-      dbResult.rows.forEach((row) => {
+      dbResult.rows.forEach((row: any) => {
         expect(row.enqueued_at).toBeNull();
         expect(row.status).toBe('pending');
       });
@@ -194,7 +194,7 @@ describe('Webhook Integration Tests - New Architecture', () => {
         ORDER BY ordinal_position
       `);
 
-      const columns = result.rows.map(row => ({
+      const columns = result.rows.map((row: any) => ({
         name: row.column_name,
         type: row.data_type,
         nullable: row.is_nullable,
@@ -225,7 +225,7 @@ describe('Webhook Integration Tests - New Architecture', () => {
         WHERE tablename = 'payment_webhooks'
       `);
 
-      const indexNames = result.rows.map(row => row.indexname);
+      const indexNames = result.rows.map((row: any) => row.indexname);
 
       // Verify critical indexes exist
       expect(indexNames).toContain('payment_webhooks_webhook_id_key'); // UNIQUE

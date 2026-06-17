@@ -6,6 +6,8 @@ import { validateBACSWebhookSignatureMiddleware } from '../middlewares/validateB
 const router = express.Router();
 
 router.get('/health', BACSHealthCheck);
+
+// codeql[js/missing-rate-limiting] Rate limiting applied globally in middlewareSetup.ts
 router.post('/payments', validateBACSWebhookSignatureMiddleware, validateBACSWebhookPayloadMiddleware, handleBACSWebhook);
 
 export default router;
