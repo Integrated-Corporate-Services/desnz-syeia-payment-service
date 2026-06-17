@@ -1,0 +1,8 @@
+{
+  "statusCode": 200,
+  "body": {
+    "received": true,
+    "duplicate": true,
+    "correlationId": "{{UUID}}"
+  }
+}

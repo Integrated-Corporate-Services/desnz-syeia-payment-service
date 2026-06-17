@@ -1,0 +1,7 @@
+{
+  "statusCode": 202,
+  "body": {
+    "received": true,
+    "correlationId": "{{UUID}}"
+  }
+}
