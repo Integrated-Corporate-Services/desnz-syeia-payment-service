@@ -1,0 +1,23 @@
+{
+  "event": {
+    "eventId": "abc00001-0001-4000-8000-000000000001",
+    "eventType": "PAYMENT_STATUS_UPDATE",
+    "eventVersion": "1.0",
+    "occurredAt": "2026-06-17T10:00:00.000Z",
+    "source": "UKSBS-SYSTEM"
+  },
+  "callback": {
+    "deliveryId": "def00001-0001-4000-8000-000000000001",
+    "attemptNumber": 1
+  },
+  "payment": {
+    "paymentReference": "TEST-PAY-2026-00001"
+  },
+  "detail": {
+    "status": "PAID",
+    "amount": 150000,
+    "currency": "GBP",
+    "paymentDate": "2026-06-17",
+    "transferReference": "TRF-TEST-001"
+  }
+}

@@ -7,3 +7,6 @@ dist/
 coverage/
 .vscode/
 doc/
+test-payloads/
+*.ps1
+docs
