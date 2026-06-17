@@ -1,15 +1,9 @@
-// Error Handler Setup
 import { Express, Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
-/**
- * Register 404 and error handlers
- * Must be registered after all routes
- */
 export function registerErrorHandler(app: Express): void {
-  // 404 handler with detailed debugging info
   app.use((req: Request, res: Response) => {
     logger.warn('[HTTP] Route not found', { 
       method: req.method, 
@@ -41,9 +35,7 @@ export function registerErrorHandler(app: Express): void {
     });
   });
 
-  // Global error handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    // Handle JSON parsing errors from body-parser
     if (err instanceof SyntaxError && 'body' in err) {
       logger.warn('[HTTP] Invalid JSON in request body', {
         error: err.message,

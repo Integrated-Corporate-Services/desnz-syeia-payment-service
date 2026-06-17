@@ -1,14 +1,9 @@
-// CORS Configuration
 import { Request, Response, NextFunction } from 'express';
 import config from './config';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
-/**
- * CORS middleware
- * Validates request origins against allowed CORS origins from config
- */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
   const allowedOrigins = config.security.corsOrigins;
   const origin = req.headers.origin;

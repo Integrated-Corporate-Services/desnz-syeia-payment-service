@@ -1,4 +1,3 @@
-// Route Setup
 import { Express, Request, Response } from 'express';
 import callbackRoutes from '../routes/callback';
 import bacsWebhookRoutes from '../routes/bacsWebhook';
@@ -7,16 +6,10 @@ import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
-/**
- * Register all application routes
- */
 export function registerRoutes(app: Express): void {
-  // Payment webhook routes
   app.use('/callback', callbackRoutes);
   app.use('/webhooks/bacs', bacsWebhookRoutes);
 
-
-  // Root-level health check with database connectivity check
   app.get('/health', async (req: Request, res: Response) => {
     const { checkDatabaseConnectivity } = require('../database/db');
     
