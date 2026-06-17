@@ -230,7 +230,7 @@ export const govPayConfig = {
  * UKSBS Webhook Configuration
  */
 export const uksbsWebhookConfig = {
-  signingKey: getConfigValue('UKSBS_WEBHOOK_SIGNING_KEY', 'dev-uksbs-key-change-in-production'),
+  signingKey: getConfigValue('UKSBS_WEBHOOK_SIGNING_KEY'),
   signingAlgorithm: getConfigValue('UKSBS_SIGNING_ALGORITHM', 'sha256'),
 };
 
