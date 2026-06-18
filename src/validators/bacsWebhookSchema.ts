@@ -28,7 +28,7 @@ import {
   ERROR_CURRENCY_INVALID,
   ERROR_PAYMENT_DATE_REQUIRED,
   ERROR_PAYMENT_DATE_FORMAT,
-  ERROR_TRANSFER_REFERENCE_INVALID,
+  ERROR_BACS_REFERENCE_INVALID,
 } from '../constants/bacs.constants';
 
 export const bacsWebhookSchema = Joi.object({
@@ -146,10 +146,10 @@ export const bacsWebhookSchema = Joi.object({
         'string.pattern.base': ERROR_PAYMENT_DATE_FORMAT,
       }),
 
-    transferReference: Joi.string()
+    bacsReference: Joi.string()
       .optional()
       .messages({
-        'string.empty': ERROR_TRANSFER_REFERENCE_INVALID,
+        'string.empty': ERROR_BACS_REFERENCE_INVALID,
       }),
   }).required(),
 }).options({ 

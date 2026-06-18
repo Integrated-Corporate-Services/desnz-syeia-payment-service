@@ -18,6 +18,6 @@
     "amount": 150000,
     "currency": "GBP",
     "paymentDate": "2026-06-17",
-    "transferReference": "TRF-TEST-001"
+    "bacsReference": "TRF-TEST-001"
   }
 }

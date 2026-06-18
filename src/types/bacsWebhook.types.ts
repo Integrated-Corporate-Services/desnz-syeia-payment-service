@@ -48,7 +48,7 @@ export interface BACSPaymentDetail {
   amount: number;            // Payment amount in pence
   currency: string;          // Currency code (e.g., "GBP")
   paymentDate: string;       // Payment date in YYYY-MM-DD format
-  transferReference: string; // Bank transfer reference
+  bacsReference: string; // Bank transfer reference
 }
 
 /**

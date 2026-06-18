@@ -82,7 +82,7 @@ export const ERROR_CURRENCY_REQUIRED = 'detail.currency is required';
 export const ERROR_CURRENCY_INVALID = 'Invalid currency. Must be one of: GBP';
 export const ERROR_PAYMENT_DATE_REQUIRED = 'detail.paymentDate is required';
 export const ERROR_PAYMENT_DATE_FORMAT = 'paymentDate must be in format YYYY-MM-DD';
-export const ERROR_TRANSFER_REFERENCE_INVALID = 'transferReference must be a non-empty string if present';
+export const ERROR_BACS_REFERENCE_INVALID = 'bacsReference must be a non-empty string if present';
 
 // Field validation helper messages
 export const ERROR_FIELD_MUST_BE_STRING = 'must be a string';
