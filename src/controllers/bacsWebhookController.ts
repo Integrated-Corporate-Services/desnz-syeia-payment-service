@@ -119,7 +119,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
     }
 
     if (result.retryable) {
-      logger.warn('[BACSWebhook] Retryable error', {
+      logger.warn('[BACSWebhook] Retryable error - database issue', {
         eventId,
         deliveryId,
         paymentId,
@@ -129,12 +129,15 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
         error_category: 'database',
         error_code: ERROR_CODES.DATABASE_ERROR,
         error_retryable: true,
-        status_code: HTTP_STATUS.ACCEPTED,
+        status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
       });
-      return res.status(HTTP_STATUS.ACCEPTED).json(buildRetryableErrorResponse(result.error || 'Unknown retryable error'));
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        error: 'Internal error — please retry',
+        errorCode: ERROR_CODES.DATABASE_ERROR,
+      });
     }
 
-    logger.error('[BACSWebhook] Permanent error', {
+    logger.error('[BACSWebhook] Permanent error - database issue', {
       eventId,
       deliveryId,
       paymentId,
@@ -144,9 +147,12 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       error_category: 'database',
       error_code: ERROR_CODES.DATABASE_ERROR,
       error_retryable: false,
-      status_code: HTTP_STATUS.ACCEPTED,
+      status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     });
-    return res.status(HTTP_STATUS.ACCEPTED).json(buildPermanentErrorResponse(result.error || 'Unknown permanent error'));
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      error: 'Internal error — please retry',
+      errorCode: ERROR_CODES.DATABASE_ERROR,
+    });
   } catch (error) {
     logger.error('[BACSWebhook] Unexpected error', {
       error: error instanceof Error ? error.message : String(error),
@@ -158,9 +164,12 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       outcome: OUTCOME_ERROR_INTERNAL,
       error_category: 'internal',
       error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
-      status_code: HTTP_STATUS.ACCEPTED,
+      status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     });
-    return res.status(HTTP_STATUS.ACCEPTED).json(buildUnexpectedErrorResponse());
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      error: 'Internal error — please retry',
+      errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR,
+    });
   }
 }
 

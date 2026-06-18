@@ -110,6 +110,9 @@ describe('BACS Webhook Integration Tests', () => {
 
       expect(response1.status).toBe(202);
 
+      // Small delay to ensure first request commits to database
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       // Second request - duplicate detection
       const headers2 = createBACSWebhookHeaders(bodyString, SIGNING_SECRET);
       const response2 = await request(app)
@@ -163,15 +166,18 @@ describe('BACS Webhook Integration Tests', () => {
       expect(response.status).toBe(202);
       expect(response.body.received).toBe(true);
 
+      // Small delay to ensure database commit completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Verify FAILED status stored
       const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
       expect(dbRecord.status).toBe('FAILED');
     });
 
-    test('1.5 Should accept webhook without transferReference', async () => {
+    test('1.5 Should accept webhook without bacsReference', async () => {
       const payload = loadFixture('./fixtures/requests/happy-path-failed-payment.json');
       payload.event.eventId = 'abc00005-0005-4000-8000-000000000005';
-      delete payload.detail.transferReference;
+      delete payload.detail.bacsReference;
       const bodyString = JSON.stringify(payload);
       const headers = createBACSWebhookHeaders(bodyString, SIGNING_SECRET);
 
@@ -183,9 +189,12 @@ describe('BACS Webhook Integration Tests', () => {
       expect(response.status).toBe(202);
       expect(response.body.received).toBe(true);
 
-      // Verify stored without transferReference
+      // Small delay to ensure database commit completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify stored without bacsReference
       const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
-      expect(dbRecord.raw_payload.detail.transferReference).toBeUndefined();
+      expect(dbRecord.raw_payload.detail.bacsReference).toBeUndefined();
     });
   });
 
@@ -508,6 +517,9 @@ describe('BACS Webhook Integration Tests', () => {
         .set(headers1)
         .send(payload);
 
+      // Small delay to ensure first request commits to database
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       // Attempt duplicate insert
       const headers2 = createBACSWebhookHeaders(bodyString, SIGNING_SECRET);
       const response2 = await request(app)
@@ -539,6 +551,9 @@ describe('BACS Webhook Integration Tests', () => {
         .post(WEBHOOK_ENDPOINT)
         .set(headers)
         .send(payload);
+
+      // Small delay to ensure database commit completes
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
       expect(dbRecord.correlation_id).toBe(testCorrelationId);
@@ -628,7 +643,11 @@ describe('BACS Webhook Integration Tests', () => {
 
         expect(response.status).toBe(202);
         
+        // Small delay to ensure database commit completes
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
+        expect(dbRecord).toBeDefined();
         expect(dbRecord.raw_payload.detail.currency).toBe(currency);
       }
     });
@@ -655,7 +674,11 @@ describe('BACS Webhook Integration Tests', () => {
 
         expect(response.status).toBe(202);
         
+        // Small delay to ensure database commit completes
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
+        expect(dbRecord).toBeDefined();
         expect(dbRecord.event_type).toBe(eventType);
       }
     });

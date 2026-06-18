@@ -43,7 +43,7 @@ describe('Edge Cases - Extended', () => {
     expect(response1.status).toBe(202);
 
     // Small delay to ensure first request commits to database
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Second request with deliveryId B (same eventId)
     const payload2 = { ...basePayload, callback: { deliveryId: 'def00102-0102-4000-8000-000000000002', attemptNumber: 2 } };
