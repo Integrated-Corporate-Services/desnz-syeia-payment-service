@@ -15,6 +15,7 @@ router.get('/health', healthCheck);
 // 1. Signature verification (Pay-Signature header)
 // 2. Payload structure validation
 // 3. Webhook processing
+// codeql[js/missing-rate-limiting] Rate limiting applied globally in middlewareSetup.ts
 router.post(
   '/payment',
   validateWebhookSignatureMiddleware,

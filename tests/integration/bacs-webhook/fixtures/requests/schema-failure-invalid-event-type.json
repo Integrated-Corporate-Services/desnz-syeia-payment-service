@@ -1,0 +1,18 @@
+{
+  "event": {
+    "eventId": "aaaaaaaa-0001-4000-8000-000000000001",
+    "eventType": "REFUND_STATUS_UPDATE",
+    "eventVersion": "1.0",
+    "occurredAt": "2026-06-17T10:00:00.000Z",
+    "source": "UKSBS-SYSTEM"
+  },
+  "payment": {
+    "paymentReference": "TEST-PAY-REFUND"
+  },
+  "detail": {
+    "status": "PAID",
+    "amount": 100000,
+    "currency": "GBP",
+    "paymentDate": "2026-06-17"
+  }
+}

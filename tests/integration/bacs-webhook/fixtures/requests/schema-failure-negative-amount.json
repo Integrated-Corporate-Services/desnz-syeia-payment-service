@@ -1,0 +1,18 @@
+{
+  "event": {
+    "eventId": "aaaaaaaa-0003-4000-8000-000000000003",
+    "eventType": "PAYMENT_STATUS_UPDATE",
+    "eventVersion": "1.0",
+    "occurredAt": "2026-06-17T10:00:00.000Z",
+    "source": "UKSBS-SYSTEM"
+  },
+  "payment": {
+    "paymentReference": "TEST-PAY-NEG"
+  },
+  "detail": {
+    "status": "PAID",
+    "amount": -500,
+    "currency": "GBP",
+    "paymentDate": "2026-06-17"
+  }
+}

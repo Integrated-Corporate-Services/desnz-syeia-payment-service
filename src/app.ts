@@ -1,215 +1,24 @@
 // Express Application Setup
-import express, { Express, Request, Response, NextFunction } from 'express';
-import callbackRoutes from './routes/callback';
-import uksbsCallbackRoutes from './routes/uksbsCallback';
-import getLogger from './utils/loggerHelper';
-import config from './config/config';
-import { HTTP_STATUS } from './constants/error.constants';
+import express, { Express } from 'express';
+import { registerMiddleware } from './config/middlewareSetup';
+import { registerRoutes } from './config/routeSetup';
+import { registerErrorHandler } from './config/errorHandler';
 
-const logger = getLogger(module);
-
-// Simple rate limiting middleware
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-
-function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  const windowMs = config.server.rateLimitWindowMs;
-  const maxRequests = config.server.rateLimitMax;
-  
-  const record = rateLimitMap.get(ip);
-  
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
-    return next();
-  }
-  
-  if (record.count >= maxRequests) {
-    logger.warn('[RateLimit] Request limit exceeded', { ip, count: record.count });
-    return res.status(429).json({ error: 'Too many requests' });
-  }
-  
-  record.count++;
-  next();
-}
-
-// Clean up old rate limit entries every minute
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of rateLimitMap.entries()) {
-    if (now > record.resetTime) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}, 60000);
-
+/**
+ * Create and configure Express application
+ * Follows modular architecture pattern for better maintainability
+ */
 export function createApp(): Express {
   const app = express();
 
-  // Trust proxy (for rate limiting and IP detection)
-  app.set('trust proxy', true);
+  // Register middleware (CORS, rate limiting, security headers, body parsing, logging)
+  registerMiddleware(app);
 
-  // CORS middleware
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const allowedOrigins = config.security.corsOrigins;
-    const origin = req.headers.origin;
-    
-    if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
-      res.setHeader('Access-Control-Allow-Origin', origin || '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Correlation-ID, Pay-Signature');
-      res.setHeader('Access-Control-Max-Age', '86400');
-    }
-    
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-    
-    next();
-  });
+  // Register application routes (webhooks, health checks, debug endpoints)
+  registerRoutes(app);
 
-  // Rate limiting
-  app.use(rateLimitMiddleware);
-
-  // Security headers
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    next();
-  });
-
-  // Middleware
-  // Capture raw body for signature verification before JSON parsing
-  interface RequestWithRawBody extends Request {
-    rawBody?: string;
-  }
-
-  app.use(express.json({ 
-    limit: '1mb',
-    verify: (req: Request, res, buf, encoding) => {
-      (req as RequestWithRawBody).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
-    }
-  }));
-  app.use(express.urlencoded({ limit: '1mb', extended: true }));
-
-  // Request logging middleware
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    logger.info('[HTTP] Request', {
-      method: req.method,
-      path: req.path,
-      correlationId: req.headers['x-correlation-id'],
-    });
-    next();
-  });
-
-  // Routes
-  app.use('/callback', callbackRoutes);
-  app.use('/webhooks/payments', uksbsCallbackRoutes);
-
-  // Debug endpoint to list all routes (helpful for troubleshooting)
-  app.get('/routes', (req: Request, res: Response) => {
-    const routes = {
-      message: 'Available routes in this service',
-      routes: {
-        'GOV.UK Pay Webhooks': {
-          'Health Check': 'GET /callback/health',
-          'Webhook Receiver': 'POST /callback/payment',
-        },
-        'UKSBS Webhooks': {
-          'Health Check': 'GET /webhooks/payments/health',
-          'Webhook Receiver': 'POST /webhooks/payments/payment',
-        },
-        'General': {
-          'Health Check': 'GET /health',
-          'Routes List': 'GET /routes',
-        },
-      },
-      timestamp: new Date().toISOString(),
-    };
-    res.json(routes);
-  });
-
-  // Health check (root level too) - with DB connectivity check
-  app.get('/health', async (req: Request, res: Response) => {
-    const { checkDatabaseConnectivity } = require('./database/db');
-    
-    const health: any = {
-      status: 'healthy',
-      service: 'callback-service',
-      timestamp: new Date().toISOString(),
-      checks: {},
-    };
-
-    try {
-      const dbCheck = await checkDatabaseConnectivity();
-      health.checks.database = {
-        status: dbCheck.connected ? 'up' : 'down',
-        latency_ms: dbCheck.latencyMs,
-      };
-
-      if (dbCheck.error) {
-        health.checks.database.error = dbCheck.error;
-      }
-
-      if (!dbCheck.connected) {
-        health.status = 'unhealthy';
-        return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
-      }
-    } catch (error) {
-      health.status = 'unhealthy';
-      health.checks.database = {
-        status: 'down',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
-    }
-
-    res.json(health);
-  });
-
-  // 404 handler with detailed debugging info
-  app.use((req: Request, res: Response) => {
-    logger.warn('[HTTP] Route not found', { 
-      method: req.method, 
-      path: req.path,
-      url: req.url,
-      originalUrl: req.originalUrl,
-      headers: req.headers,
-    });
-    
-    res.status(404).json({ 
-      error: 'Route not found',
-      requestedPath: req.path,
-      requestedUrl: req.url,
-      method: req.method,
-      availableRoutes: {
-        govukPay: {
-          health: 'GET /callback/health',
-          webhook: 'POST /callback/payment',
-        },
-        uksbs: {
-          health: 'GET /webhooks/payments/health',
-          webhook: 'POST /webhooks/payments/payment',
-        },
-        general: {
-          health: 'GET /health',
-        },
-      },
-      hint: 'Check if the route path matches exactly (case-sensitive)',
-    });
-  });
-
-  // Error handler
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    logger.error('[HTTP] Error', {
-      error: err.message,
-      method: req.method,
-      path: req.path,
-    });
-    res.status(500).json({ error: 'Internal server error' });
-  });
+  // Register error handlers (404 and 500 handlers)
+  registerErrorHandler(app);
 
   return app;
 }
