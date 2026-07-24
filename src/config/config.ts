@@ -86,8 +86,56 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
   }
 }
 
+function isProductionLikeEnvironment(nodeEnv: string): boolean {
+  const prodLikeEnvironments = ['production', 'staging', 'development'];
+  return prodLikeEnvironments.includes(nodeEnv.toLowerCase());
+}
+
+function isSecretsManagerArn(value: string): boolean {
+  return value.startsWith('arn:aws:secretsmanager:');
+}
+
+function validateProductionCredentialRequirements(
+  dbCredentials: string | undefined,
+  nodeEnv: string
+): void {
+  const isProdLike = isProductionLikeEnvironment(nodeEnv);
+  
+  if (!isProdLike) {
+    return;
+  }
+  
+  if (!dbCredentials) {
+    throw new Error(
+      `FATAL: DB_CREDENTIALS environment variable is required in ${nodeEnv} environment. ` +
+      'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
+    );
+  }
+  
+  if (!isSecretsManagerArn(dbCredentials)) {
+    throw new Error(
+      `FATAL: In ${nodeEnv} environment, DB_CREDENTIALS must be AWS Secrets Manager ARN. ` +
+      'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
+      `Current value type: ${dbCredentials.substring(0, 10)}... ` +
+      'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+    );
+  }
+}
+
 export async function getDbSecretConfig(): Promise<DbCredentials> {
   const dbCredentials = process.env.DB_CREDENTIALS;
+  const nodeEnv = process.env.NODE_ENV || 'local';
+  
+  validateProductionCredentialRequirements(dbCredentials, nodeEnv);
+  
+  if (dbCredentials && isSecretsManagerArn(dbCredentials)) {
+    if (!needRefreshSecret()) {
+      return cachedSecret!.value;
+    }
+    const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
+    cachedSecret = { value: credentials, fetchedAt: Date.now() };
+    return credentials;
+  }
   
   if (dbCredentials) {
     try {
@@ -96,14 +144,10 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
         return parsed;
       }
     } catch {
-      if (dbCredentials.startsWith('arn:aws:secretsmanager:')) {
-        if (!needRefreshSecret()) {
-          return cachedSecret!.value;
-        }
-        const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
-        cachedSecret = { value: credentials, fetchedAt: Date.now() };
-        return credentials;
-      }
+      throw new Error(
+        'DB_CREDENTIALS must be either AWS Secrets Manager ARN or valid JSON ' +
+        'with username and password fields.'
+      );
     }
   }
   
@@ -111,7 +155,9 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
   const password = process.env.DB_PASSWORD;
   
   if (!password) {
-    throw new Error('DB credentials not found. Provide either DB_CREDENTIALS (AWS) or DB_PASSWORD (local).');
+    throw new Error(
+      'DB credentials not found. Local development requires DB_PASSWORD environment variable.'
+    );
   }
   
   return { username: user, password };

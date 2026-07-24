@@ -164,7 +164,7 @@ export const ERROR_MESSAGES = {
   AUTHENTICATION_FAILED: 'Webhook authentication failed',
   INVALID_SIGNATURE: 'Invalid webhook signature',
   MISSING_SIGNATURE: 'Webhook signature header is missing',
-  SIGNATURE_VERIFICATION_FAILED: 'Webhook validation failed',
+  SIGNATURE_VERIFICATION_FAILED: 'Failed to verify webhook signature',
   SIGNING_KEY_NOT_CONFIGURED: 'Webhook signing key not configured',
   
   // Resource
