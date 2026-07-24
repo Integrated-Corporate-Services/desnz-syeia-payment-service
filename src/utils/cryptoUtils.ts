@@ -11,15 +11,17 @@ export function constantTimeSignatureCompare(
   encoding: BufferEncoding = 'utf8'
 ): boolean {
   try {
-    const bufferLength = encoding === 'hex' 
-      ? CRYPTO_CONFIG.SHA256_BYTE_LENGTH 
-      : CRYPTO_CONFIG.SHA256_HEX_LENGTH;
+    const expectedBuf = Buffer.from(expected, encoding);
+    const receivedBuf = Buffer.from(received, encoding);
     
-    const expectedBuf = Buffer.alloc(bufferLength);
-    const receivedBuf = Buffer.alloc(bufferLength);
-    
-    Buffer.from(expected, encoding).copy(expectedBuf);
-    Buffer.from(received, encoding).copy(receivedBuf);
+    if (expectedBuf.length !== receivedBuf.length) {
+      const maxLength = Math.max(expectedBuf.length, receivedBuf.length);
+      const paddedExpected = Buffer.alloc(maxLength);
+      const paddedReceived = Buffer.alloc(maxLength);
+      expectedBuf.copy(paddedExpected);
+      receivedBuf.copy(paddedReceived);
+      return crypto.timingSafeEqual(paddedExpected, paddedReceived);
+    }
     
     return crypto.timingSafeEqual(expectedBuf, receivedBuf);
   } catch (error) {
@@ -48,5 +50,5 @@ export function verifyHmacSignature(
   signingKey: string
 ): boolean {
   const expectedSignature = computeHmacSignature(message, signingKey, 'hex');
-  return constantTimeSignatureCompare(expectedSignature, receivedSignature, 'utf8');
+  return constantTimeSignatureCompare(expectedSignature, receivedSignature, 'hex');
 }

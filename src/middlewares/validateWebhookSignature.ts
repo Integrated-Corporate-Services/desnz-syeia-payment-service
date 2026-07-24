@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { ERROR_MESSAGES, ERROR_CATEGORIES } from '../constants';
 import { verifyHmacSignature } from '../utils/cryptoUtils';
 import getLogger from '../utils/loggerHelper';
-import config from '../config/config';
 
 const logger = getLogger(module);
 

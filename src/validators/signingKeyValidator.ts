@@ -1,8 +1,5 @@
 import { ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { CRYPTO_CONFIG, ENVIRONMENTS } from '../constants/config.constants';
-import getLogger from '../utils/loggerHelper';
-
-const logger = getLogger(module);
 
 export interface SigningKeyValidationResult {
   isValid: boolean;
@@ -40,8 +37,9 @@ function validateKeyLength(
 ): SigningKeyValidationResult {
   const { MIN_SIGNING_KEY_LENGTH, RECOMMENDED_SIGNING_KEY_LENGTH } = CRYPTO_CONFIG;
   const warnings: string[] = [];
+  const trimmedKey = key.trim();
   
-  if (isProduction && key.length < MIN_SIGNING_KEY_LENGTH) {
+  if (isProduction && trimmedKey.length < MIN_SIGNING_KEY_LENGTH) {
     return {
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_TOO_SHORT,
@@ -49,7 +47,7 @@ function validateKeyLength(
     };
   }
   
-  if (key.length < RECOMMENDED_SIGNING_KEY_LENGTH) {
+  if (trimmedKey.length < RECOMMENDED_SIGNING_KEY_LENGTH) {
     warnings.push(
       `${keyName} is shorter than recommended length.`
     );
@@ -65,41 +63,28 @@ export function validateSigningKeyConfiguration(
   config: SigningKeyConfig
 ): SigningKeyValidationResult {
   const { govPaySigningKey, bacsSigningKey, environment } = config;
-  const isProduction = environment === ENVIRONMENTS.PRODUCTION;
+  const normalizedEnv = environment.toLowerCase();
+  const isProduction = normalizedEnv === ENVIRONMENTS.PRODUCTION || 
+                       normalizedEnv === ENVIRONMENTS.DEVELOPMENT || 
+                       normalizedEnv === ENVIRONMENTS.STAGING;
   
   const govPayExistsResult = validateKeyExists(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY');
   if (!govPayExistsResult.isValid) {
-    logger.error('[Webhook] GOV.UK Pay signing key validation failed', {
-      error_code: govPayExistsResult.errorCode,
-      error_category: ERROR_CATEGORIES.CONFIGURATION,
-    });
     throw new Error(govPayExistsResult.errorMessage);
   }
   
   const bacsExistsResult = validateKeyExists(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY');
   if (!bacsExistsResult.isValid) {
-    logger.error('[Webhook] BACS signing key validation failed', {
-      error_code: bacsExistsResult.errorCode,
-      error_category: ERROR_CATEGORIES.CONFIGURATION,
-    });
     throw new Error(bacsExistsResult.errorMessage);
   }
   
   const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', isProduction);
   if (!govPayLengthResult.isValid) {
-    logger.error('[Webhook] GOV.UK Pay signing key validation failed', {
-      error_code: govPayLengthResult.errorCode,
-      environment,
-    });
     throw new Error(govPayLengthResult.errorMessage);
   }
   
   const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', isProduction);
   if (!bacsLengthResult.isValid) {
-    logger.error('[Webhook] BACS signing key validation failed', {
-      error_code: bacsLengthResult.errorCode,
-      environment,
-    });
     throw new Error(bacsLengthResult.errorMessage);
   }
   
@@ -107,20 +92,6 @@ export function validateSigningKeyConfiguration(
     ...(govPayLengthResult.warnings || []),
     ...(bacsLengthResult.warnings || []),
   ];
-  
-  if (allWarnings.length > 0) {
-    allWarnings.forEach(warning => {
-      logger.warn('[Webhook] Signing key configuration warning', {
-        warning,
-        environment,
-        error_code: ERROR_CODES.SIGNING_KEY_WEAK,
-      });
-    });
-  }
-  
-  logger.info('[Webhook] Signing key configuration validated successfully', {
-    environment,
-  });
   
   return {
     isValid: true,

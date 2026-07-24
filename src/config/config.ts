@@ -233,6 +233,7 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     validateConfig();
   } catch (error) {
+    console.error('Configuration validation failed:', error instanceof Error ? error.message : String(error));
     if (!isLocal) {
       process.exit(1);
     }
