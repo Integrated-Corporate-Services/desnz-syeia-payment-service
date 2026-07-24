@@ -26,8 +26,7 @@ function validateKeyExists(
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_NOT_CONFIGURED,
       errorMessage: `${keyName} is not configured. ` +
-        'Webhook signature verification requires a valid signing key. ' +
-        'Generate a secure key with: openssl rand -hex 64',
+        'Webhook signature verification requires a valid signing key.',
     };
   }
   
@@ -46,17 +45,13 @@ function validateKeyLength(
     return {
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_TOO_SHORT,
-      errorMessage: `${keyName} must be at least ${MIN_SIGNING_KEY_LENGTH} characters in production. ` +
-        `Current length: ${key.length}. ` +
-        `Recommended length: ${RECOMMENDED_SIGNING_KEY_LENGTH} characters (512 bits). ` +
-        'Generate with: openssl rand -hex 64',
+      errorMessage: `${keyName} does not meet minimum length requirements for production.`,
     };
   }
   
   if (key.length < RECOMMENDED_SIGNING_KEY_LENGTH) {
     warnings.push(
-      `${keyName} is only ${key.length} characters. ` +
-      `Recommended: ${RECOMMENDED_SIGNING_KEY_LENGTH} characters for maximum security.`
+      `${keyName} is shorter than recommended length.`
     );
   }
   
@@ -92,10 +87,8 @@ export function validateSigningKeyConfiguration(
   
   const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', isProduction);
   if (!govPayLengthResult.isValid) {
-    logger.error('[Webhook] GOV.UK Pay signing key too short', {
+    logger.error('[Webhook] GOV.UK Pay signing key validation failed', {
       error_code: govPayLengthResult.errorCode,
-      key_length: govPaySigningKey.length,
-      min_length: CRYPTO_CONFIG.MIN_SIGNING_KEY_LENGTH,
       environment,
     });
     throw new Error(govPayLengthResult.errorMessage);
@@ -103,10 +96,8 @@ export function validateSigningKeyConfiguration(
   
   const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', isProduction);
   if (!bacsLengthResult.isValid) {
-    logger.error('[Webhook] BACS signing key too short', {
+    logger.error('[Webhook] BACS signing key validation failed', {
       error_code: bacsLengthResult.errorCode,
-      key_length: bacsSigningKey.length,
-      min_length: CRYPTO_CONFIG.MIN_SIGNING_KEY_LENGTH,
       environment,
     });
     throw new Error(bacsLengthResult.errorMessage);
@@ -129,8 +120,6 @@ export function validateSigningKeyConfiguration(
   
   logger.info('[Webhook] Signing key configuration validated successfully', {
     environment,
-    govpay_key_length: govPaySigningKey.length,
-    bacs_key_length: bacsSigningKey.length,
   });
   
   return {
