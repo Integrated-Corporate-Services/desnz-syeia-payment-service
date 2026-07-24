@@ -172,7 +172,7 @@ export const CORRELATION_ID = {
   LENGTH: 12,
 } as const;
 
-export const SECURITY_CONFIG = {
+export const CRYPTO_CONFIG = {
   MIN_SIGNING_KEY_LENGTH: 32,
   RECOMMENDED_SIGNING_KEY_LENGTH: 64,
   SHA256_HEX_LENGTH: 64,

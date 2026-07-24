@@ -1,5 +1,5 @@
-import { ERROR_CODES } from '../constants/error.constants';
-import { SECURITY_CONFIG, ENVIRONMENTS } from '../constants/config.constants';
+import { ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
+import { CRYPTO_CONFIG, ENVIRONMENTS } from '../constants/config.constants';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
@@ -39,7 +39,7 @@ function validateKeyLength(
   keyName: string,
   isProduction: boolean
 ): SigningKeyValidationResult {
-  const { MIN_SIGNING_KEY_LENGTH, RECOMMENDED_SIGNING_KEY_LENGTH } = SECURITY_CONFIG;
+  const { MIN_SIGNING_KEY_LENGTH, RECOMMENDED_SIGNING_KEY_LENGTH } = CRYPTO_CONFIG;
   const warnings: string[] = [];
   
   if (isProduction && key.length < MIN_SIGNING_KEY_LENGTH) {
@@ -76,7 +76,7 @@ export function validateSigningKeyConfiguration(
   if (!govPayExistsResult.isValid) {
     logger.error('[Webhook] GOV.UK Pay signing key validation failed', {
       error_code: govPayExistsResult.errorCode,
-      error_category: 'configuration',
+      error_category: ERROR_CATEGORIES.CONFIGURATION,
     });
     throw new Error(govPayExistsResult.errorMessage);
   }
@@ -85,7 +85,7 @@ export function validateSigningKeyConfiguration(
   if (!bacsExistsResult.isValid) {
     logger.error('[Webhook] BACS signing key validation failed', {
       error_code: bacsExistsResult.errorCode,
-      error_category: 'configuration',
+      error_category: ERROR_CATEGORIES.CONFIGURATION,
     });
     throw new Error(bacsExistsResult.errorMessage);
   }
@@ -95,7 +95,7 @@ export function validateSigningKeyConfiguration(
     logger.error('[Webhook] GOV.UK Pay signing key too short', {
       error_code: govPayLengthResult.errorCode,
       key_length: govPaySigningKey.length,
-      min_length: SECURITY_CONFIG.MIN_SIGNING_KEY_LENGTH,
+      min_length: CRYPTO_CONFIG.MIN_SIGNING_KEY_LENGTH,
       environment,
     });
     throw new Error(govPayLengthResult.errorMessage);
@@ -106,7 +106,7 @@ export function validateSigningKeyConfiguration(
     logger.error('[Webhook] BACS signing key too short', {
       error_code: bacsLengthResult.errorCode,
       key_length: bacsSigningKey.length,
-      min_length: SECURITY_CONFIG.MIN_SIGNING_KEY_LENGTH,
+      min_length: CRYPTO_CONFIG.MIN_SIGNING_KEY_LENGTH,
       environment,
     });
     throw new Error(bacsLengthResult.errorMessage);

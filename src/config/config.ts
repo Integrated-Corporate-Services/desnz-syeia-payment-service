@@ -181,7 +181,7 @@ export const featureFlags = {
   detailedLogging: getBooleanConfig('DETAILED_LOGGING', isLocal),
 };
 
-export const securityConfig = {
+export const networkConfig = {
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
   trustedProxies: getConfigValue('TRUSTED_PROXIES', '').split(',').filter(Boolean),
 };
@@ -220,7 +220,7 @@ function validateConfig(): void {
     errors.push('WEBHOOK_MAX_RETRIES must be between 0 and 10');
   }
 
-  if (isProduction && securityConfig.corsOrigins.length === 0) {
+  if (isProduction && networkConfig.corsOrigins.length === 0) {
     errors.push('CORS_ORIGINS must be configured for production (webhook endpoints should not allow * origin)');
   }
 
@@ -248,7 +248,7 @@ const config = {
   govPay: govPayConfig,
   bacsWebhookConfig: bacsWebhookConfig,
   features: featureFlags,
-  security: securityConfig,
+  network: networkConfig,
   aws: awsConfig,
   isLocal,
   isProduction,

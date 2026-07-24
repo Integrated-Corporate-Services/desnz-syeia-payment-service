@@ -33,10 +33,17 @@ export const HTTP_STATUS = {
   GATEWAY_TIMEOUT: 504,
 } as const;
 
-/**
- * Error Codes for API responses
- * Categorized by HTTP status code intent
- */
+export const ERROR_CATEGORIES = {
+  VALIDATION: 'validation',
+  AUTHENTICATION: 'authentication',
+  AUTHORIZATION: 'authorization',
+  CONFIGURATION: 'configuration',
+  DATABASE: 'database',
+  INTERNAL: 'internal',
+  NETWORK: 'network',
+  CRYPTOGRAPHY: 'cryptography',
+} as const;
+
 export enum ERROR_CODES {
   // Validation Errors (400)
   VALIDATION_ERROR = 'VALIDATION_ERROR',
@@ -57,7 +64,7 @@ export enum ERROR_CODES {
   MISSING_SIGNATURE = 'MISSING_SIGNATURE',
   SIGNATURE_VERIFICATION_FAILED = 'SIGNATURE_VERIFICATION_FAILED',
   
-  SECURITY_CONFIG_INVALID = 'SECURITY_CONFIG_INVALID',
+  CONFIG_INVALID = 'CONFIG_INVALID',
   SIGNING_KEY_NOT_CONFIGURED = 'SIGNING_KEY_NOT_CONFIGURED',
   SIGNING_KEY_TOO_SHORT = 'SIGNING_KEY_TOO_SHORT',
   SIGNING_KEY_WEAK = 'SIGNING_KEY_WEAK',
@@ -147,19 +154,18 @@ export const RETRYABLE_ERROR_KEYWORDS = [
  * User-facing error messages
  */
 export const ERROR_MESSAGES = {
-  // Validation
   VALIDATION_FAILED: 'Request validation failed',
-  INVALID_WEBHOOK_STRUCTURE: 'Invalid webhook payload structure',
+  INVALID_WEBHOOK_STRUCTURE: 'Invalid webhook event structure',
   MISSING_REQUIRED_FIELD: (field: string) => `Missing required field: ${field}`,
-  INVALID_PAYMENT_ID: 'Invalid payment ID format',
+  INVALID_PAYMENT_ID: 'Unable to extract payment ID from event',
   INVALID_WEBHOOK_ID: 'Invalid webhook ID format',
   INVALID_EVENT_TYPE: 'Invalid webhook event type',
   
-  // Authentication
   AUTHENTICATION_FAILED: 'Webhook authentication failed',
   INVALID_SIGNATURE: 'Invalid webhook signature',
   MISSING_SIGNATURE: 'Webhook signature header is missing',
-  SIGNATURE_VERIFICATION_FAILED: 'Failed to verify webhook signature',
+  SIGNATURE_VERIFICATION_FAILED: 'Webhook validation failed',
+  SIGNING_KEY_NOT_CONFIGURED: 'Webhook signing key not configured',
   
   // Resource
   WEBHOOK_NOT_FOUND: (id: string) => `Webhook ${id} not found`,

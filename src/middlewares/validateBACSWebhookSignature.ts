@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
 import { computeHmacSignature, constantTimeSignatureCompare } from '../utils/cryptoUtils';
 import config from '../config/config';
-import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import {
   BACS_SIGNATURE_VERSION,
   TIMESTAMP_WINDOW_MS,
@@ -43,7 +43,7 @@ function verifyBACSSignature(
   } catch (error) {
     logger.error('[BACSWebhook] Signature verification error', {
       error: error instanceof Error ? error.message : String(error),
-      error_category: 'signature_verification',
+      error_category: ERROR_CATEGORIES.CRYPTOGRAPHY,
     });
     return false;
   }

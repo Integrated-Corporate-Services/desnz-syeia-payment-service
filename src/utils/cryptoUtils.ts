@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { SECURITY_CONFIG } from '../constants/config.constants';
+import { CRYPTO_CONFIG } from '../constants/config.constants';
+import { ERROR_CATEGORIES } from '../constants/error.constants';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
@@ -11,8 +12,8 @@ export function constantTimeSignatureCompare(
 ): boolean {
   try {
     const bufferLength = encoding === 'hex' 
-      ? SECURITY_CONFIG.SHA256_BYTE_LENGTH 
-      : SECURITY_CONFIG.SHA256_HEX_LENGTH;
+      ? CRYPTO_CONFIG.SHA256_BYTE_LENGTH 
+      : CRYPTO_CONFIG.SHA256_HEX_LENGTH;
     
     const expectedBuf = Buffer.alloc(bufferLength);
     const receivedBuf = Buffer.alloc(bufferLength);
@@ -24,7 +25,7 @@ export function constantTimeSignatureCompare(
   } catch (error) {
     logger.error('[Webhook] Signature comparison failed', {
       error: error instanceof Error ? error.message : String(error),
-      error_category: 'cryptography',
+      error_category: ERROR_CATEGORIES.CRYPTOGRAPHY,
     });
     return false;
   }
@@ -36,7 +37,7 @@ export function computeHmacSignature(
   outputFormat: 'hex' | 'base64' = 'hex'
 ): string {
   return crypto
-    .createHmac(SECURITY_CONFIG.HMAC_ALGORITHM, signingKey)
+    .createHmac(CRYPTO_CONFIG.HMAC_ALGORITHM, signingKey)
     .update(message, 'utf-8')
     .digest(outputFormat);
 }
