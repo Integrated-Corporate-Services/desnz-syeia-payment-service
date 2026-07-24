@@ -1,9 +1,11 @@
 const dotenv = require('dotenv');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+import { validateSigningKeyConfiguration } from '../validators/signingKeyValidator';
 
 dotenv.config();
 
 const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
+const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 
 if (isLocal) {
   const envFile = `.env.${process.env.NODE_ENV || 'local'}`;
@@ -174,12 +176,10 @@ export const featureFlags = {
   callbackServiceEnabled: getBooleanConfig('CALLBACK_SERVICE_ENABLED', true),
   retryEnabled: getBooleanConfig('RETRY_ENABLED', true),
   dlqEnabled: getBooleanConfig('DLQ_ENABLED', true),
-  signatureVerificationEnabled: getBooleanConfig('SIGNATURE_VERIFICATION_ENABLED', true),
+  signatureVerificationEnabled: true,
   metricsEnabled: getBooleanConfig('METRICS_ENABLED', false),
   detailedLogging: getBooleanConfig('DETAILED_LOGGING', isLocal),
 };
-
-const isProduction = process.env.NODE_ENV === 'production';
 
 export const securityConfig = {
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
@@ -198,13 +198,11 @@ export const awsConfig = {
 function validateConfig(): void {
   const errors: string[] = [];
 
-  if (!webhookConfig.signingKey) {
-    errors.push('GOVPAY_WEBHOOK_SIGNING_KEY is required');
-  }
-
-  if (!bacsWebhookConfig.signingKey) {
-    errors.push('UKSBS_WEBHOOK_SIGNING_KEY is required');
-  }
+  validateSigningKeyConfiguration({
+    govPaySigningKey: webhookConfig.signingKey,
+    bacsSigningKey: bacsWebhookConfig.signingKey,
+    environment: process.env.NODE_ENV || 'local',
+  });
 
   if (!govPayConfig.apiKey) {
     errors.push('GOVPAY_API_KEY is required');
@@ -235,11 +233,10 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     validateConfig();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Configuration validation failed:', error);
     if (!isLocal) {
       process.exit(1);
     }
+    throw error;
   }
 }
 

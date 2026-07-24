@@ -1,10 +1,6 @@
-// Webhook Signature Verification Middleware
-// Verifies webhook signature from GOV.UK Pay
-// Official Documentation: https://docs.payments.service.gov.uk/webhooks/
-
 import { Request, Response, NextFunction } from 'express';
-import crypto from 'crypto';
 import { ERROR_MESSAGES } from '../constants';
+import { verifyHmacSignature } from '../utils/cryptoUtils';
 import getLogger from '../utils/loggerHelper';
 import config from '../config/config';
 
@@ -15,7 +11,7 @@ interface WebhookSignatureOptions {
 }
 
 interface WebhookEvent {
-  webhook_message_id: string; // Updated to match official GOV.UK Pay spec
+  webhook_message_id: string;
   api_version: number;
   event_type: string;
   created_date: string;
@@ -50,24 +46,17 @@ export function extractWebhookHeaders(req: WebhookRequest): {
   return { signature, webhookId };
 }
 
-/**
- * Verify webhook signature using HMAC-SHA256
- */
 export function verifyWebhookSignature(
   signature: string,
   body: string,
   signingKey: string
 ): boolean {
   try {
-    const expectedSignature = crypto
-      .createHmac('sha256', signingKey)
-      .update(body, 'utf-8')
-      .digest('hex');
-
-    return signature === expectedSignature;
+    return verifyHmacSignature(signature, body, signingKey);
   } catch (error) {
     logger.error('[Webhook] Signature verification error', {
       error: error instanceof Error ? error.message : String(error),
+      error_category: 'signature_verification',
     });
     return false;
   }
@@ -182,38 +171,11 @@ export function validateWebhookSignature(
   return { valid: true, event, paymentId };
 }
 
-/**
- * Express middleware for webhook signature validation
- */
 export function validateWebhookSignatureMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
-  // Check if signature verification is enabled
-  if (!config.features.signatureVerificationEnabled) {
-    logger.info('[Webhook] Signature verification is disabled - skipping validation');
-    
-    // Still parse the event for downstream processing
-    const event = parseWebhookEvent(req.body);
-    if (!event) {
-      logger.warn('[Webhook] Invalid webhook event structure');
-      return res.status(400).json({ error: 'Invalid webhook event structure' });
-    }
-    
-    const paymentId = extractPaymentIdFromEvent(event);
-    if (!paymentId) {
-      logger.warn('[Webhook] Unable to extract payment ID from event');
-      return res.status(400).json({ error: 'Unable to extract payment ID from event' });
-    }
-    
-    // Attach validated data to request
-    (req as any).webhookEvent = event;
-    (req as any).paymentId = paymentId;
-    
-    return next();
-  }
-
   const signingKey = process.env.GOVPAY_WEBHOOK_SIGNING_KEY || '';
 
   if (!signingKey) {
