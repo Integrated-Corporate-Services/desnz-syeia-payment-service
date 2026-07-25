@@ -1,4 +1,14 @@
-// Rate Limiting Middleware
+// @deprecated This custom rate limiter is deprecated and no longer used
+// Use the centralized rate limiting configuration in src/config/rateLimiting.ts instead
+// This file is kept for backward compatibility only and will be removed in a future release
+//
+// Migration Guide:
+// - Replace: import { rateLimitMiddleware } from '../middlewares/rateLimiter'
+// - With: import { globalRateLimiter, webhookRateLimiter } from '../config/rateLimiting'
+//
+// The new implementation uses express-rate-limit (industry standard, CodeQL recognized)
+// instead of this custom in-memory Map implementation
+
 import { Request, Response, NextFunction } from 'express';
 import config from '../config/config';
 import getLogger from '../utils/loggerHelper';

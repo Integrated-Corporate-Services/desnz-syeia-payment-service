@@ -1,7 +1,7 @@
 import { Express, Request } from 'express';
 import express from 'express';
 import { corsMiddleware } from './corsConfig';
-import { rateLimitMiddleware } from '../middlewares/rateLimiter';
+import { globalRateLimiter } from './rateLimiting';
 import { securityHeadersMiddleware } from '../middlewares/securityHeaders';
 import { requestLoggerMiddleware } from '../middlewares/requestLogger';
 import { requestContextMiddleware } from '../middlewares/requestContext';
@@ -16,7 +16,7 @@ export function registerMiddleware(app: Express): void {
 
   app.use(requestContextMiddleware);
   app.use(corsMiddleware);
-  app.use(rateLimitMiddleware);
+  app.use(globalRateLimiter);
   app.use(securityHeadersMiddleware);
 
   app.use(express.json({ 
