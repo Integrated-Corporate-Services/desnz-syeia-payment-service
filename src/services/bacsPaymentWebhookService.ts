@@ -2,6 +2,7 @@ import getLogger from '../utils/loggerHelper';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
+import { sanitizeError } from '../utils/errorSanitizer';
 import {
   WEBHOOK_CREATOR,
   ERROR_CATEGORY_DATABASE,
@@ -92,10 +93,11 @@ export async function processBACSWebhook(
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     logger.error('[BACSWebhookService] Error storing webhook', {
       webhookId,
       paymentId,
-      error: errorMessage,
+      error: sanitizeError(errorMessage),
       code: error.code,
       duration,
       correlationId,

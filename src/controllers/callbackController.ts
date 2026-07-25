@@ -3,6 +3,7 @@ import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 import getLogger from '../utils/loggerHelper';
 import { processWebhook } from '../services/paymentWebhookService';
 import { HTTP_STATUS } from '../constants/error.constants';
+import { sanitizeError, createSafeErrorLog } from '../utils/errorSanitizer';
 
 const logger = getLogger(module);
 
@@ -193,10 +194,11 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
 
     // Retryable error (e.g., SQS temporarily unavailable)
     if (result.retryable) {
+      // ✅ FIX HIGH-003: Sanitize error messages
       logger.warn('Webhook processing encountered retryable error', {
         webhookId,
         paymentId,
-        error: result.error,
+        error: sanitizeError(result.error),
         correlationId,
       });
 
@@ -210,10 +212,11 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
     }
 
     // Permanent failure (e.g., invalid event type, database constraint violation)
+    // ✅ FIX HIGH-003: Sanitize error messages
     logger.error('Webhook processing permanent error', {
       webhookId,
       paymentId,
-      error: result.error,
+      error: sanitizeError(result.error),
       correlationId,
     });
 
@@ -226,12 +229,13 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
     } as WebhookResponse);
     
   } catch (error) {
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     logger.error('Unexpected error processing webhook', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      webhookId,
-      paymentId,
-      correlationId,
+      ...createSafeErrorLog(error, {
+        webhookId,
+        paymentId,
+        correlationId,
+      }),
     });
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
@@ -273,7 +277,8 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[Health] Database connectivity check failed', { error: dbCheck.error });
+      // ✅ FIX HIGH-003: Sanitize error messages
+      logger.error('[Health] Database connectivity check failed', { error: sanitizeError(dbCheck.error) });
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -282,7 +287,8 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[Health] Database check failed', { error: error instanceof Error ? error.message : String(error) });
+    // ✅ FIX HIGH-003: Sanitize error messages
+    logger.error('[Health] Database check failed', createSafeErrorLog(error));
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 

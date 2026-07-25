@@ -66,13 +66,33 @@ import { WEBHOOK_SIGNING_ALGORITHM } from '../../src/constants';
 
 describe('WebhookSignatureValidation', () => {
   describe('extractWebhookHeaders', () => {
-    it('should extract Pay-Signature from headers and webhook_message_id from body', () => {
+    it('should extract Pay-Signature from headers and webhook_message_id from body with UUID validation', () => {
       const req = {
         headers: {
           'pay-signature': 'test-signature-123',
         },
         body: {
-          webhook_message_id: 'evt_test_12345',
+          webhook_message_id: '550e8400-e29b-41d4-a716-446655440000', // Valid UUID
+        },
+      };
+
+      const result = extractWebhookHeaders(req);
+
+      expect(result).toEqual({
+        signature: 'test-signature-123',
+        webhookId: '550e8400-e29b-41d4-a716-446655440000',
+        isValidWebhookId: true,
+      });
+    });
+
+    // ✅ FIX HIGH-005: Test invalid webhook_message_id format
+    it('should detect invalid webhook_message_id (not a UUID)', () => {
+      const req = {
+        headers: {
+          'pay-signature': 'test-signature-123',
+        },
+        body: {
+          webhook_message_id: 'evt_test_12345', // Not a UUID
         },
       };
 
@@ -81,16 +101,25 @@ describe('WebhookSignatureValidation', () => {
       expect(result).toEqual({
         signature: 'test-signature-123',
         webhookId: 'evt_test_12345',
+        isValidWebhookId: false,
       });
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        '[Webhook] Invalid webhook_message_id format (not a valid UUID)',
+        expect.objectContaining({
+          webhookId: 'evt_test_12345',
+          type: 'string',
+        })
+      );
     });
 
-    it('should handle array signature header', () => {
+    // ✅ FIX HIGH-005: Test SQL injection attempt
+    it('should detect SQL injection attempt in webhook_message_id', () => {
       const req = {
         headers: {
-          'pay-signature': ['test-signature-123', 'extra'],
+          'pay-signature': 'test-signature-123',
         },
         body: {
-          webhook_message_id: 'evt_from_body_12345',
+          webhook_message_id: "1'; DROP TABLE payment_webhooks; --",
         },
       };
 
@@ -98,7 +127,28 @@ describe('WebhookSignatureValidation', () => {
 
       expect(result).toEqual({
         signature: 'test-signature-123',
-        webhookId: 'evt_from_body_12345',
+        webhookId: "1'; DROP TABLE payment_webhooks; --",
+        isValidWebhookId: false,
+      });
+      expect(mockLogger.warn).toHaveBeenCalled();
+    });
+
+    it('should handle array signature header with valid UUID', () => {
+      const req = {
+        headers: {
+          'pay-signature': ['test-signature-123', 'extra'],
+        },
+        body: {
+          webhook_message_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
+        },
+      };
+
+      const result = extractWebhookHeaders(req);
+
+      expect(result).toEqual({
+        signature: 'test-signature-123',
+        webhookId: '123e4567-e89b-12d3-a456-426614174000',
+        isValidWebhookId: true,
       });
     });
 
@@ -113,6 +163,7 @@ describe('WebhookSignatureValidation', () => {
       expect(result).toEqual({
         signature: null,
         webhookId: null,
+        isValidWebhookId: false,
       });
     });
 
@@ -129,6 +180,27 @@ describe('WebhookSignatureValidation', () => {
       expect(result).toEqual({
         signature: 'test-signature-123',
         webhookId: null,
+        isValidWebhookId: false,
+      });
+    });
+
+    // ✅ FIX HIGH-005: Test empty string webhook_message_id
+    it('should handle empty string webhook_message_id', () => {
+      const req = {
+        headers: {
+          'pay-signature': 'test-signature-123',
+        },
+        body: {
+          webhook_message_id: '',
+        },
+      };
+
+      const result = extractWebhookHeaders(req);
+
+      expect(result).toEqual({
+        signature: 'test-signature-123',
+        webhookId: null, // Empty string coerces to null
+        isValidWebhookId: false,
       });
     });
   });
@@ -360,9 +432,9 @@ describe('WebhookSignatureValidation', () => {
   describe('validateWebhookSignature', () => {
     const signingKey = 'test-signing-key';
 
-    it('should validate complete valid webhook', () => {
+    it('should validate complete valid webhook with UUID webhook_message_id', () => {
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: '550e8400-e29b-41d4-a716-446655440000', // ✅ Valid UUID
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -410,7 +482,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should reject invalid signature', () => {
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
         api_version: 1,
         event_type: 'card_payment_succeeded',
         resource_id: 'pay_12345',
@@ -433,7 +505,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should reject invalid event structure', () => {
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', // Valid UUID but invalid event structure
       };
       const bodyString = JSON.stringify(body);
       const signature = crypto
@@ -457,7 +529,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle missing resource_id by defaulting to unknown', () => {
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'c9bf9e57-1685-4c89-bafb-ff5af830be8a', // Valid UUID
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -488,7 +560,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle missing rawBody by reconstructing from body', () => {
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851', // Valid UUID
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -515,6 +587,113 @@ describe('WebhookSignatureValidation', () => {
 
       expect(result.valid).toBe(true);
     });
+
+    // ✅ FIX HIGH-005: Test invalid webhook_message_id format rejection
+    it('should reject webhook with invalid webhook_message_id format (not UUID)', () => {
+      const body = {
+        webhook_message_id: 'evt_test_12345', // Not a valid UUID
+        api_version: 1,
+        event_type: 'card_payment_succeeded',
+        created_date: '2024-01-15T10:30:00Z',
+        resource_id: 'pay_12345',
+        resource_type: 'payment',
+        resource: {
+          payment_id: 'pay_12345',
+        },
+      };
+      const bodyString = JSON.stringify(body);
+      const signature = crypto
+        .createHmac(WEBHOOK_SIGNING_ALGORITHM, signingKey)
+        .update(bodyString, 'utf-8')
+        .digest('hex');
+
+      const req = {
+        headers: {
+          'pay-signature': signature,
+        },
+        body,
+        rawBody: bodyString,
+      };
+
+      const result = validateWebhookSignature(req, signingKey);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('Invalid webhook_message_id format');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        '[Webhook] Rejected webhook with invalid webhook_message_id format',
+        expect.objectContaining({
+          webhookId: 'evt_test_12345',
+          reason: 'Not a valid UUID',
+        })
+      );
+    });
+
+    // ✅ FIX HIGH-005: Test SQL injection attempt rejection
+    it('should reject SQL injection attempt in webhook_message_id', () => {
+      const body = {
+        webhook_message_id: "1'; DROP TABLE payment_webhooks; --",
+        api_version: 1,
+        event_type: 'card_payment_succeeded',
+        created_date: '2024-01-15T10:30:00Z',
+        resource_id: 'pay_12345',
+        resource_type: 'payment',
+        resource: {
+          payment_id: 'pay_12345',
+        },
+      };
+      const bodyString = JSON.stringify(body);
+      const signature = crypto
+        .createHmac(WEBHOOK_SIGNING_ALGORITHM, signingKey)
+        .update(bodyString, 'utf-8')
+        .digest('hex');
+
+      const req = {
+        headers: {
+          'pay-signature': signature,
+        },
+        body,
+        rawBody: bodyString,
+      };
+
+      const result = validateWebhookSignature(req, signingKey);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('Invalid webhook_message_id format');
+    });
+
+    // ✅ FIX HIGH-005: Test valid UUID passes
+    it('should accept valid UUID webhook_message_id', () => {
+      const body = {
+        webhook_message_id: '550e8400-e29b-41d4-a716-446655440000', // Valid UUID
+        api_version: 1,
+        event_type: 'card_payment_succeeded',
+        created_date: '2024-01-15T10:30:00Z',
+        resource_id: 'pay_12345',
+        resource_type: 'payment',
+        resource: {
+          payment_id: 'pay_12345',
+        },
+      };
+      const bodyString = JSON.stringify(body);
+      const signature = crypto
+        .createHmac(WEBHOOK_SIGNING_ALGORITHM, signingKey)
+        .update(bodyString, 'utf-8')
+        .digest('hex');
+
+      const req = {
+        headers: {
+          'pay-signature': signature,
+        },
+        body,
+        rawBody: bodyString,
+      };
+
+      const result = validateWebhookSignature(req, signingKey);
+
+      expect(result.valid).toBe(true);
+      expect(result.event).toBeDefined();
+      expect(result.paymentId).toBe('pay_12345');
+    });
   });
 
   describe('validateWebhookSignatureMiddleware', () => {
@@ -527,7 +706,7 @@ describe('WebhookSignatureValidation', () => {
       process.env.GOVPAY_WEBHOOK_SIGNING_KEY = signingKey;
 
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', // Valid UUID
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -571,9 +750,9 @@ describe('WebhookSignatureValidation', () => {
           'pay-signature': 'invalid-signature',
         },
         body: {
-          webhook_message_id: 'evt_test_12345',
+          webhook_message_id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8', // Valid UUID
         },
-        rawBody: JSON.stringify({ webhook_message_id: 'evt_test_12345' }),
+        rawBody: JSON.stringify({ webhook_message_id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8' }),
       };
       const res: any = {
         status: jest.fn().mockReturnThis(),
@@ -636,7 +815,7 @@ describe('WebhookSignatureValidation', () => {
       process.env.GOVPAY_WEBHOOK_SIGNING_KEY = signingKey;
 
       const body = {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: '6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b', // Valid UUID
       };
       const bodyString = JSON.stringify(body);
       const signature = crypto

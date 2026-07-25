@@ -6,6 +6,7 @@
 import getLogger from '../utils/loggerHelper';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
+import { sanitizeError } from '../utils/errorSanitizer';
 
 const logger = getLogger(module);
 const { ERROR_CODES } = require('../constants');
@@ -109,10 +110,11 @@ export async function processWebhook(
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     logger.error('[WebhookService] Error storing webhook', {
       webhookId,
       paymentId,
-      error: errorMessage,
+      error: sanitizeError(errorMessage),
       code: error.code,
       duration,
       correlationId,

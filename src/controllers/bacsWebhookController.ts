@@ -4,6 +4,7 @@ import getLogger from '../utils/loggerHelper';
 import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
 import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
+import { sanitizeError, createSafeErrorLog } from '../utils/errorSanitizer';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 import { getValidSignatureOrGenerateId, serializeWebhookPayload } from '../utils/webhookUtils';
 import {
@@ -118,12 +119,13 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       return res.status(HTTP_STATUS.ACCEPTED).json(buildSuccessResponse(correlationId));
     }
 
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     if (result.retryable) {
       logger.warn('[BACSWebhook] Retryable error - database issue', {
         eventId,
         deliveryId,
         paymentId,
-        error: result.error,
+        error: sanitizeError(result.error),
         correlationId,
         outcome: OUTCOME_ERROR_DATABASE,
         error_category: 'database',
@@ -137,11 +139,12 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       });
     }
 
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     logger.error('[BACSWebhook] Permanent error - database issue', {
       eventId,
       deliveryId,
       paymentId,
-      error: result.error,
+      error: sanitizeError(result.error),
       correlationId,
       outcome: OUTCOME_ERROR_DATABASE,
       error_category: 'database',
@@ -154,17 +157,18 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       errorCode: ERROR_CODES.DATABASE_ERROR,
     });
   } catch (error) {
+    // ✅ FIX HIGH-003: Sanitize error messages to prevent information disclosure
     logger.error('[BACSWebhook] Unexpected error', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      eventId,
-      deliveryId,
-      paymentId,
-      correlationId,
-      outcome: OUTCOME_ERROR_INTERNAL,
-      error_category: 'internal',
-      error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
-      status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      ...createSafeErrorLog(error, {
+        eventId,
+        deliveryId,
+        paymentId,
+        correlationId,
+        outcome: OUTCOME_ERROR_INTERNAL,
+        error_category: 'internal',
+        error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
+        status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      }),
     });
     return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: 'Internal error — please retry',
@@ -191,7 +195,8 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[BACSHealth] Database down', { error: dbCheck.error });
+      // ✅ FIX HIGH-003: Sanitize error messages
+      logger.error('[BACSHealth] Database down', { error: sanitizeError(dbCheck.error) });
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -200,7 +205,8 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[BACSHealth] Check failed', { error: error instanceof Error ? error.message : String(error) });
+    // ✅ FIX HIGH-003: Sanitize error messages
+    logger.error('[BACSHealth] Check failed', createSafeErrorLog(error));
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 

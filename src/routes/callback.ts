@@ -6,9 +6,19 @@ const { validateWebhookSignatureMiddleware } = require('../middlewares/validateW
 const {
   validateWebhookPayloadMiddleware,
 } = require('../validators/webhookPayloadValidator');
+import { ipWhitelistMiddleware } from '../middlewares/ipWhitelist';
+import config from '../config/config';
 
-// Health check endpoint
-router.get('/health', healthCheck);
+// ✅ FIX HIGH-004: Health endpoint with IP whitelist protection
+// Restricts access to monitoring services within VPC CIDR range
+router.get(
+  '/health',
+  ipWhitelistMiddleware(
+    config.security.healthEndpointAllowedIps,
+    config.security.healthEndpointBypassInLocal
+  ),
+  healthCheck
+);
 
 // Payment webhook endpoint for GOV.UK Pay notifications
 // Middleware chain:

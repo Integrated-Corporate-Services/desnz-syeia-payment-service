@@ -11,6 +11,9 @@ interface RequestWithRawBody extends Request {
   rawBody?: string;
 }
 
+// ✅ FIX HIGH-008: Only store rawBody for webhook endpoints to prevent memory exhaustion DoS
+const WEBHOOK_PATHS = ['/callback/payment', '/webhooks/bacs/payments'];
+
 export function registerMiddleware(app: Express): void {
   app.set('trust proxy', true);
 
@@ -19,14 +22,19 @@ export function registerMiddleware(app: Express): void {
   app.use(rateLimitMiddleware);
   app.use(securityHeadersMiddleware);
 
+  // ✅ FIX HIGH-008: Reduce body size limit and conditionally store rawBody
   app.use(express.json({ 
-    limit: '1mb',
+    limit: '100kb',  // ✅ Reduced from 1mb to 100kb to prevent memory exhaustion
     verify: (req: Request, res, buf, encoding) => {
-      (req as RequestWithRawBody).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
+      // ✅ FIX HIGH-008: Only store rawBody for webhook signature verification
+      // This prevents memory exhaustion DoS on non-webhook endpoints
+      if (WEBHOOK_PATHS.includes(req.path)) {
+        (req as RequestWithRawBody).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
+      }
     }
   }));
 
-  app.use(express.urlencoded({ limit: '1mb', extended: true }));
+  app.use(express.urlencoded({ limit: '100kb', extended: true }));  // ✅ Also reduce urlencoded limit
 
   app.use(httpLoggingMiddleware);
   app.use(requestLoggerMiddleware);

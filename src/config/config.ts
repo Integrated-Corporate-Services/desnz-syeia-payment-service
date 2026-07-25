@@ -1,5 +1,8 @@
 const dotenv = require('dotenv');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+import getLogger from '../utils/loggerHelper';
+
+const logger = getLogger(module);
 
 dotenv.config();
 
@@ -86,33 +89,85 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
 
 export async function getDbSecretConfig(): Promise<DbCredentials> {
   const dbCredentials = process.env.DB_CREDENTIALS;
+  const nodeEnv = (process.env.NODE_ENV || 'local').toLowerCase();
+  const isProduction = nodeEnv === 'production';
+  const isLocalOrTest = nodeEnv === 'local' || nodeEnv === 'test';
   
-  if (dbCredentials) {
+  // ✅ FIX HIGH-002 & CRITICAL-007: Enforce Secrets Manager in production
+  if (!dbCredentials) {
+    if (isProduction) {
+      throw new Error(
+        'FATAL: DB_CREDENTIALS environment variable required in production. ' +
+        'Must be AWS Secrets Manager ARN (e.g., arn:aws:secretsmanager:eu-west-2:123456789012:secret:db-credentials-abc123)'
+      );
+    }
+    
+    // Local/test fallback with clear warning
+    const user = process.env.DB_USER || 'postgres';
+    const password = process.env.DB_PASSWORD;
+    
+    if (!password) {
+      throw new Error(
+        'DB credentials not found. Provide DB_CREDENTIALS (AWS Secrets Manager ARN) or ' +
+        'DB_PASSWORD (local/test only).'
+      );
+    }
+    
+    // ✅ FIX HIGH-007: Use structured logger instead of console.warn
+    logger.warn('[SECURITY WARNING] Using plaintext DB credentials', {
+      source: 'DB_USER/DB_PASSWORD',
+      environment: process.env.NODE_ENV,
+      message: 'This is ONLY allowed in local/test environments. Production MUST use AWS Secrets Manager ARN.'
+    });
+    
+    return { username: user, password };
+  }
+  
+  // ✅ Validate ARN format for Secrets Manager
+  const isSecretsManagerArn = dbCredentials.startsWith('arn:aws:secretsmanager:');
+  
+  if (isProduction && !isSecretsManagerArn) {
+    throw new Error(
+      'FATAL: In production, DB_CREDENTIALS must be AWS Secrets Manager ARN. ' +
+      'Plaintext credentials are forbidden for PCI DSS compliance. ' +
+      'Format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:SECRET_NAME'
+    );
+  }
+  
+  // ✅ Fetch from Secrets Manager (with caching)
+  if (isSecretsManagerArn) {
+    if (!needRefreshSecret()) {
+      return cachedSecret!.value;
+    }
+    
+    const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
+    cachedSecret = { value: credentials, fetchedAt: Date.now() };
+    return credentials;
+  }
+  
+  // ✅ Local/test can use JSON credentials (not recommended but allowed)
+  if (isLocalOrTest) {
     try {
       const parsed = JSON.parse(dbCredentials);
       if (parsed.username && parsed.password) {
+        // ✅ FIX HIGH-007: Use structured logger instead of console.warn
+        logger.warn('[SECURITY WARNING] Using JSON plaintext credentials', {
+          format: 'JSON',
+          environment: process.env.NODE_ENV,
+          message: 'Consider using AWS Secrets Manager ARN even in local development.'
+        });
         return parsed;
       }
-    } catch {
-      if (dbCredentials.startsWith('arn:aws:secretsmanager:')) {
-        if (!needRefreshSecret()) {
-          return cachedSecret!.value;
-        }
-        const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
-        cachedSecret = { value: credentials, fetchedAt: Date.now() };
-        return credentials;
-      }
+      throw new Error('JSON must contain username and password fields');
+    } catch (err) {
+      throw new Error(`Failed to parse DB_CREDENTIALS as JSON: ${err}`);
     }
   }
   
-  const user = process.env.DB_USER || 'postgres';
-  const password = process.env.DB_PASSWORD;
-  
-  if (!password) {
-    throw new Error('DB credentials not found. Provide either DB_CREDENTIALS (AWS) or DB_PASSWORD (local).');
-  }
-  
-  return { username: user, password };
+  throw new Error(
+    'Invalid DB_CREDENTIALS format. Must be AWS Secrets Manager ARN or ' +
+    'valid JSON with username/password (local/test only).'
+  );
 }
 
 export const serverConfig = {
@@ -184,6 +239,11 @@ const isProduction = process.env.NODE_ENV === 'production';
 export const securityConfig = {
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
   trustedProxies: getConfigValue('TRUSTED_PROXIES', '').split(',').filter(Boolean),
+  healthEndpointAllowedIps: getConfigValue('HEALTH_ENDPOINT_ALLOWED_IPS', '')
+    .split(',')
+    .map((ip: string) => ip.trim())
+    .filter(Boolean),
+  healthEndpointBypassInLocal: getBooleanConfig('HEALTH_ENDPOINT_BYPASS_IN_LOCAL', true),
 };
 
 export const awsConfig = {
@@ -210,8 +270,18 @@ function validateConfig(): void {
     errors.push('GOVPAY_API_KEY is required');
   }
 
-  if (!process.env.DB_CREDENTIALS && !dbConfig.password) {
-    errors.push('DB credentials required: provide either DB_CREDENTIALS (AWS Secrets Manager) or DB_PASSWORD (local)');
+  // ✅ FIX HIGH-002: Enhanced database credential validation
+  if (isProduction) {
+    if (!process.env.DB_CREDENTIALS) {
+      errors.push('DB_CREDENTIALS is required in production (must be AWS Secrets Manager ARN)');
+    } else if (!process.env.DB_CREDENTIALS.startsWith('arn:aws:secretsmanager:')) {
+      errors.push('DB_CREDENTIALS must be AWS Secrets Manager ARN in production (not plaintext)');
+    }
+  } else {
+    // Local/test: require at least one credential method
+    if (!process.env.DB_CREDENTIALS && !dbConfig.password) {
+      errors.push('DB credentials required: provide either DB_CREDENTIALS (AWS Secrets Manager ARN) or DB_PASSWORD (local/test only)');
+    }
   }
 
   if (serverConfig.keepAliveTimeout <= serverConfig.timeout) {
@@ -235,8 +305,12 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     validateConfig();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Configuration validation failed:', error);
+    // ✅ FIX HIGH-007: Use structured logger instead of console.error
+    logger.error('Configuration validation failed', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      environment: process.env.NODE_ENV
+    });
     if (!isLocal) {
       process.exit(1);
     }

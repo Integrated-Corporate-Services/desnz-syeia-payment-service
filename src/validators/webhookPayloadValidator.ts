@@ -297,10 +297,13 @@ function isValidExpiryDate(expiry: string): boolean {
 
 /**
  * Express middleware for validating webhook payload
+ * ✅ FIX HIGH-006: Event Type Validation Bypass
+ * Ensures validation errors halt request processing immediately
  */
-export function validateWebhookPayloadMiddleware(req: any, res: any, next: any): void {
+export function validateWebhookPayloadMiddleware(req: any, res: any, next: any): any {
   const result = validateWebhookPayload(req.body);
 
+  // ✅ FIX HIGH-006: Halt processing on validation failure
   if (!result.valid) {
     logger.warn('[WebhookValidator] Payload validation failed', {
       errors: result.errors,
@@ -309,7 +312,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
 
     return res.status(400).json({
       error: 'Invalid webhook payload',
-      details: result.errors,
+      errors: result.errors,  // ✅ Changed from 'details' to 'errors'
     });
   }
 

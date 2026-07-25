@@ -4,6 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { validate as uuidValidate } from 'uuid';
 import { ERROR_MESSAGES } from '../constants';
 import getLogger from '../utils/loggerHelper';
 import config from '../config/config';
@@ -37,17 +38,30 @@ interface WebhookRequest {
 /**
  * Extract webhook signature and ID from request headers
  * GOV.UK Pay uses 'Pay-Signature' header (case-insensitive in Node.js)
+ * ✅ FIX HIGH-005: Added UUID validation for webhook_message_id
  */
 export function extractWebhookHeaders(req: WebhookRequest): {
   signature: string | null;
   webhookId: string | null;
+  isValidWebhookId: boolean;
 } {
   // Official GOV.UK Pay header name is 'Pay-Signature'
   const signatureHeader = req.headers['pay-signature'];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader || null;
-  // webhook_message_id comes from body, not headers
+  
+  // ✅ FIX HIGH-005: Validate webhook_message_id is a valid UUID
+  // This prevents SQL injection and ensures proper format
   const webhookId = req.body?.webhook_message_id || null;
-  return { signature, webhookId };
+  const isValidWebhookId = webhookId ? uuidValidate(webhookId) : false;
+  
+  if (webhookId && !isValidWebhookId) {
+    logger.warn('[Webhook] Invalid webhook_message_id format (not a valid UUID)', {
+      webhookId,
+      type: typeof webhookId,
+    });
+  }
+  
+  return { signature, webhookId, isValidWebhookId };
 }
 
 /**
@@ -148,15 +162,25 @@ export function extractPaymentIdFromEvent(event: WebhookEvent): string | null {
 /**
  * Main webhook validation function
  * Returns { valid: boolean, error?: string, paymentId?: string }
+ * ✅ FIX HIGH-005: Added webhook_message_id UUID validation
  */
 export function validateWebhookSignature(
   req: any,
   signingKey: string
 ): { valid: boolean; error?: string; event?: WebhookEvent; paymentId?: string } {
-  const { signature, webhookId } = extractWebhookHeaders(req);
+  const { signature, webhookId, isValidWebhookId } = extractWebhookHeaders(req);
 
+  // ✅ FIX HIGH-005: Validate webhook_message_id format before processing
   if (!signature || !webhookId) {
     return { valid: false, error: 'Invalid webhook signature' };
+  }
+  
+  if (!isValidWebhookId) {
+    logger.warn('[Webhook] Rejected webhook with invalid webhook_message_id format', {
+      webhookId,
+      reason: 'Not a valid UUID',
+    });
+    return { valid: false, error: 'Invalid webhook_message_id format' };
   }
 
   // Get raw body - use captured rawBody if available, otherwise reconstruct from parsed body

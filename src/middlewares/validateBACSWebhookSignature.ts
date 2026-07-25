@@ -45,11 +45,16 @@ function verifyBACSSignature(
     const expectedBuf = Buffer.from(expectedSignature, 'hex');
     const receivedBuf = Buffer.from(signature, 'hex');
     
-    if (expectedBuf.length !== receivedBuf.length) {
-      return false;
-    }
+    // ✅ FIX HIGH-001: Pad to consistent length to prevent timing attack
+    // This eliminates the timing side-channel that leaks signature length information
+    const maxLen = Math.max(expectedBuf.length, receivedBuf.length);
+    const paddedExpected = Buffer.alloc(maxLen);
+    const paddedReceived = Buffer.alloc(maxLen);
     
-    return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+    expectedBuf.copy(paddedExpected);
+    receivedBuf.copy(paddedReceived);
+    
+    return crypto.timingSafeEqual(paddedExpected, paddedReceived);
   } catch (error) {
     logger.error('[BACSWebhook] Signature verification error', {
       error: error instanceof Error ? error.message : String(error),
