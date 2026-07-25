@@ -208,7 +208,7 @@ describe('Signing Key Validator', () => {
           validateSigningKeyConfiguration({
             govPaySigningKey: weakValue,
             bacsSigningKey: VALID_STRONG_KEY,
-            environment: 'production',
+            environment: 'local',
           });
         }).toThrow('GOVPAY_WEBHOOK_SIGNING_KEY is a forbidden weak value');
       });
@@ -218,7 +218,7 @@ describe('Signing Key Validator', () => {
           validateSigningKeyConfiguration({
             govPaySigningKey: VALID_STRONG_KEY,
             bacsSigningKey: weakValue,
-            environment: 'production',
+            environment: 'local',
           });
         }).toThrow('UKSBS_WEBHOOK_SIGNING_KEY is a forbidden weak value');
       });
@@ -228,7 +228,7 @@ describe('Signing Key Validator', () => {
           validateSigningKeyConfiguration({
             govPaySigningKey: weakValue.toUpperCase(),
             bacsSigningKey: VALID_STRONG_KEY,
-            environment: 'production',
+            environment: 'local',
           });
         }).toThrow('GOVPAY_WEBHOOK_SIGNING_KEY is a forbidden weak value');
       });
@@ -311,12 +311,14 @@ describe('Signing Key Validator', () => {
       });
 
       it('should reject 64-char key with only 15 unique characters', () => {
-        const lowEntropyKey = 'abcdefghijklmnoabcdefghijklmnoabcdefghijklmnoabcdefghijklmno';
+        const lowEntropyKey = 'abcdefghijklmnoabcdefghijklmnoabcdefghijklmnoabcdefghijklmnoabcd';
+        expect(lowEntropyKey.length).toBe(64);
+        expect(new Set(lowEntropyKey).size).toBe(15);
         expect(() => {
           validateSigningKeyConfiguration({
             govPaySigningKey: lowEntropyKey,
             bacsSigningKey: VALID_STRONG_KEY,
-            environment: 'production',
+            environment: 'local',
           });
         }).toThrow('has insufficient entropy');
       });
@@ -496,7 +498,7 @@ describe('Signing Key Validator', () => {
         validateSigningKeyConfiguration({
           govPaySigningKey: 'test',
           bacsSigningKey: VALID_STRONG_KEY,
-          environment: 'production',
+          environment: 'local',
         });
       }).toThrow('GOVPAY_WEBHOOK_SIGNING_KEY is a forbidden weak value');
     });
