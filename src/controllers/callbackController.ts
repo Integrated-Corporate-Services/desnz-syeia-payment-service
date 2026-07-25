@@ -180,7 +180,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         correlationId,
       });
 
-      return res.status(HTTP_STATUS.OK).json({
+      return res.status(HTTP_STATUS.ACCEPTED).json({
         status: 'success',
         webhookId: String(webhookId),
         paymentId: webhookEvent.resource_id,
