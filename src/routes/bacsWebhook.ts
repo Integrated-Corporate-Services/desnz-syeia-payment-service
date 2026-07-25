@@ -1,4 +1,5 @@
 import express from 'express';
+import { webhookRateLimiter } from '../config/rateLimiting';
 import { handleBACSWebhook, BACSHealthCheck } from '../controllers/bacsWebhookController';
 import { validateBACSWebhookPayloadMiddleware } from '../validators/bacsWebhookPayloadValidator';
 import { validateBACSWebhookSignatureMiddleware } from '../middlewares/validateBACSWebhookSignature';
@@ -7,7 +8,12 @@ const router = express.Router();
 
 router.get('/health', BACSHealthCheck);
 
-// codeql[js/missing-rate-limiting] Rate limiting applied globally in middlewareSetup.ts
-router.post('/payments', validateBACSWebhookSignatureMiddleware, validateBACSWebhookPayloadMiddleware, handleBACSWebhook);
+router.post(
+  '/payments',
+  webhookRateLimiter,
+  validateBACSWebhookSignatureMiddleware,
+  validateBACSWebhookPayloadMiddleware,
+  handleBACSWebhook
+);
 
 export default router;

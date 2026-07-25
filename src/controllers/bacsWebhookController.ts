@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import getLogger from '../utils/loggerHelper';
 import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
-import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 import { getValidSignatureOrGenerateId, serializeWebhookPayload } from '../utils/webhookUtils';
 import {
@@ -52,7 +52,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       deliveryId,
       correlationId,
       outcome: OUTCOME_ERROR_VALIDATION,
-      error_category: 'validation',
+      error_category: ERROR_CATEGORIES.VALIDATION,
       error_code: ERROR_CODES.INVALID_WEBHOOK_STRUCTURE,
     });
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Invalid webhook event structure'));
@@ -64,7 +64,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       deliveryId,
       correlationId,
       outcome: OUTCOME_ERROR_VALIDATION,
-      error_category: 'validation',
+      error_category: ERROR_CATEGORIES.VALIDATION,
       error_code: ERROR_CODES.INVALID_PAYMENT_ID,
     });
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Missing or invalid payment reference'));
@@ -126,7 +126,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
         error: result.error,
         correlationId,
         outcome: OUTCOME_ERROR_DATABASE,
-        error_category: 'database',
+        error_category: ERROR_CATEGORIES.DATABASE,
         error_code: ERROR_CODES.DATABASE_ERROR,
         error_retryable: true,
         status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -162,7 +162,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       paymentId,
       correlationId,
       outcome: OUTCOME_ERROR_INTERNAL,
-      error_category: 'internal',
+      error_category: ERROR_CATEGORIES.INTERNAL,
       error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
       status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     });

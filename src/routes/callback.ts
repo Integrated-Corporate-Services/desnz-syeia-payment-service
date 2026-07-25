@@ -1,5 +1,6 @@
 // Callback Routes
 import express from 'express';
+import { webhookRateLimiter } from '../config/rateLimiting';
 const router = express.Router();
 const { handleWebhook, healthCheck } = require('../controllers/callbackController');
 const { validateWebhookSignatureMiddleware } = require('../middlewares/validateWebhookSignature');
@@ -12,12 +13,13 @@ router.get('/health', healthCheck);
 
 // Payment webhook endpoint for GOV.UK Pay notifications
 // Middleware chain:
-// 1. Signature verification (Pay-Signature header)
-// 2. Payload structure validation
-// 3. Webhook processing
-// codeql[js/missing-rate-limiting] Rate limiting applied globally in middlewareSetup.ts
+// 1. Rate limiting (express-rate-limit - CodeQL recognized)
+// 2. Signature verification (Pay-Signature header)
+// 3. Payload structure validation
+// 4. Webhook processing
 router.post(
   '/payment',
+  webhookRateLimiter,
   validateWebhookSignatureMiddleware,
   validateWebhookPayloadMiddleware,
   handleWebhook

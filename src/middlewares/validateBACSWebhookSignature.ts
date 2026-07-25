@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import crypto from 'crypto';
 import getLogger from '../utils/loggerHelper';
+import { computeHmacSignature, constantTimeSignatureCompare } from '../utils/cryptoUtils';
+import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
+import { CRYPTO_CONFIG } from '../constants/config.constants';
 import config from '../config/config';
-import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
 import {
   BACS_SIGNATURE_VERSION,
   TIMESTAMP_WINDOW_MS,
@@ -36,23 +37,25 @@ function verifyBACSSignature(
   signingSecret: string
 ): boolean {
   try {
-    const signedMessage = `${timestamp}.${body}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', signingSecret)
-      .update(signedMessage, 'utf-8')
-      .digest('hex');
-
-    const expectedBuf = Buffer.from(expectedSignature, 'hex');
-    const receivedBuf = Buffer.from(signature, 'hex');
-    
-    if (expectedBuf.length !== receivedBuf.length) {
+    // DoS protection: Reject signatures that are too long before any buffer operations
+    // HMAC-SHA256 produces exactly 64 hex characters (32 bytes * 2)
+    if (signature.length > CRYPTO_CONFIG.SHA256_HEX_LENGTH) {
+      logger.warn('[BACSWebhook] Signature length exceeds maximum', {
+        received_length: signature.length,
+        max_length: CRYPTO_CONFIG.SHA256_HEX_LENGTH,
+        error_category: ERROR_CATEGORIES.VALIDATION,
+      });
       return false;
     }
+
+    const signedMessage = `${timestamp}.${body}`;
+    const expectedSignature = computeHmacSignature(signedMessage, signingSecret, 'hex');
     
-    return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+    return constantTimeSignatureCompare(expectedSignature, signature, 'hex');
   } catch (error) {
     logger.error('[BACSWebhook] Signature verification error', {
       error: error instanceof Error ? error.message : String(error),
+      error_category: ERROR_CATEGORIES.CRYPTOGRAPHY,
     });
     return false;
   }
@@ -64,11 +67,6 @@ export function validateBACSWebhookSignatureMiddleware(
   next: NextFunction
 ): Response | void {
   const correlationId = req.headers[HEADER_CORRELATION_ID] || DEFAULT_CORRELATION_ID;
-
-  if (!config.features.signatureVerificationEnabled) {
-    logger.info('[BACSWebhook] Signature verification disabled', { correlationId });
-    return next();
-  }
 
   const signatureHeader = req.headers[HEADER_WEBHOOK_SIGNATURE];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;

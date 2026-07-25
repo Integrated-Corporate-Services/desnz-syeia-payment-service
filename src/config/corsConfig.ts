@@ -5,7 +5,7 @@ import getLogger from '../utils/loggerHelper';
 const logger = getLogger(module);
 
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-  const allowedOrigins = config.security.corsOrigins;
+  const allowedOrigins = config.network.corsOrigins;
   const origin = req.headers.origin;
   
   if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {

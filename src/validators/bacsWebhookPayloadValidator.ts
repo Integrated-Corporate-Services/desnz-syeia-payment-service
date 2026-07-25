@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { HTTP_STATUS, ERROR_CODES } from '../constants/error.constants';
+import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { ERROR_SCHEMA_VALIDATION_FAILED, HEADER_CORRELATION_ID, DEFAULT_CORRELATION_ID } from '../constants/bacs.constants';
 import getLogger from '../utils/loggerHelper';
 import { bacsWebhookSchema } from './bacsWebhookSchema';
@@ -25,7 +25,7 @@ export function validateBACSWebhookPayloadMiddleware(
     logger.warn('[BACSWebhook] Payload validation failed', {
       correlationId,
       errors: validationErrors,
-      error_category: 'validation',
+      error_category: ERROR_CATEGORIES.VALIDATION,
       error_code: ERROR_CODES.VALIDATION_ERROR,
     });
 

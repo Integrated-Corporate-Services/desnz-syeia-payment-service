@@ -172,9 +172,34 @@ export const CORRELATION_ID = {
   LENGTH: 12,
 } as const;
 
-/**
- * Type exports for type safety
- */
+export const CRYPTO_CONFIG = {
+  MIN_SIGNING_KEY_LENGTH: 32,
+  RECOMMENDED_SIGNING_KEY_LENGTH: 64,
+  MIN_UNIQUE_CHARS_32: 8,
+  MIN_UNIQUE_CHARS_64: 16,
+  SHA256_HEX_LENGTH: 64,
+  SHA256_BYTE_LENGTH: 32,
+  HMAC_ALGORITHM: 'sha256' as const,
+  FORBIDDEN_KEY_VALUES: [
+    'secret',
+    'password',
+    'test',
+    'key',
+    'changeme',
+    'admin',
+    'default',
+    'example',
+    'demo',
+    '123456',
+    'pass',
+    'root',
+    'testkey',
+    'samplekey',
+    'mykey',
+    'supersecret',
+  ],
+} as const;
+
 export type Environment = typeof ENVIRONMENTS[keyof typeof ENVIRONMENTS];
 export type LogLevel = typeof LOG_LEVELS[keyof typeof LOG_LEVELS];
 export type ServiceName = typeof SERVICE_NAMES[keyof typeof SERVICE_NAMES];

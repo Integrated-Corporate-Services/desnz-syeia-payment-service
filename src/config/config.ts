@@ -1,9 +1,12 @@
 const dotenv = require('dotenv');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+import { validateSigningKeyConfiguration } from '../validators/signingKeyValidator';
+import getLogger from '../utils/loggerHelper';
 
 dotenv.config();
 
 const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
+const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 
 if (isLocal) {
   const envFile = `.env.${process.env.NODE_ENV || 'local'}`;
@@ -84,8 +87,55 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
   }
 }
 
+function isProductionLikeEnvironment(nodeEnv: string): boolean {
+  const prodLikeEnvironments = ['production', 'staging', 'development'];
+  return prodLikeEnvironments.includes(nodeEnv.toLowerCase());
+}
+
+function isSecretsManagerArn(value: string): boolean {
+  return value.startsWith('arn:aws:secretsmanager:');
+}
+
+function validateProductionCredentialRequirements(
+  dbCredentials: string | undefined,
+  nodeEnv: string
+): void {
+  const isProdLike = isProductionLikeEnvironment(nodeEnv);
+  
+  if (!isProdLike) {
+    return;
+  }
+  
+  if (!dbCredentials) {
+    throw new Error(
+      `FATAL: DB_CREDENTIALS environment variable is required in ${nodeEnv} environment. ` +
+      'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
+    );
+  }
+  
+  if (!isSecretsManagerArn(dbCredentials)) {
+    throw new Error(
+      `FATAL: In ${nodeEnv} environment, DB_CREDENTIALS must be AWS Secrets Manager ARN. ` +
+      'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
+      'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+    );
+  }
+}
+
 export async function getDbSecretConfig(): Promise<DbCredentials> {
   const dbCredentials = process.env.DB_CREDENTIALS;
+  const nodeEnv = process.env.NODE_ENV || 'local';
+  
+  validateProductionCredentialRequirements(dbCredentials, nodeEnv);
+  
+  if (dbCredentials && isSecretsManagerArn(dbCredentials)) {
+    if (!needRefreshSecret()) {
+      return cachedSecret!.value;
+    }
+    const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
+    cachedSecret = { value: credentials, fetchedAt: Date.now() };
+    return credentials;
+  }
   
   if (dbCredentials) {
     try {
@@ -94,14 +144,9 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
         return parsed;
       }
     } catch {
-      if (dbCredentials.startsWith('arn:aws:secretsmanager:')) {
-        if (!needRefreshSecret()) {
-          return cachedSecret!.value;
-        }
-        const credentials = await fetchSecretFromAWS(dbCredentials, awsConfig.region);
-        cachedSecret = { value: credentials, fetchedAt: Date.now() };
-        return credentials;
-      }
+      throw new Error(
+        'DB_CREDENTIALS error'
+      );
     }
   }
   
@@ -109,7 +154,9 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
   const password = process.env.DB_PASSWORD;
   
   if (!password) {
-    throw new Error('DB credentials not found. Provide either DB_CREDENTIALS (AWS) or DB_PASSWORD (local).');
+    throw new Error(
+      'DB credentials not found. Local development requires DB_PASSWORD environment variable.'
+    );
   }
   
   return { username: user, password };
@@ -174,14 +221,12 @@ export const featureFlags = {
   callbackServiceEnabled: getBooleanConfig('CALLBACK_SERVICE_ENABLED', true),
   retryEnabled: getBooleanConfig('RETRY_ENABLED', true),
   dlqEnabled: getBooleanConfig('DLQ_ENABLED', true),
-  signatureVerificationEnabled: getBooleanConfig('SIGNATURE_VERIFICATION_ENABLED', true),
+  signatureVerificationEnabled: true,
   metricsEnabled: getBooleanConfig('METRICS_ENABLED', false),
   detailedLogging: getBooleanConfig('DETAILED_LOGGING', isLocal),
 };
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-export const securityConfig = {
+export const networkConfig = {
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
   trustedProxies: getConfigValue('TRUSTED_PROXIES', '').split(',').filter(Boolean),
 };
@@ -198,12 +243,20 @@ export const awsConfig = {
 function validateConfig(): void {
   const errors: string[] = [];
 
-  if (!webhookConfig.signingKey) {
-    errors.push('GOVPAY_WEBHOOK_SIGNING_KEY is required');
-  }
+  const signingKeyValidation = validateSigningKeyConfiguration({
+    govPaySigningKey: webhookConfig.signingKey,
+    bacsSigningKey: bacsWebhookConfig.signingKey,
+    environment: process.env.NODE_ENV || 'local',
+  });
 
-  if (!bacsWebhookConfig.signingKey) {
-    errors.push('UKSBS_WEBHOOK_SIGNING_KEY is required');
+  
+  if (signingKeyValidation.warnings && signingKeyValidation.warnings.length > 0) {
+    const logger = getLogger(module);
+    logger.warn('Signing key configuration warnings detected', {
+      warnings: signingKeyValidation.warnings,
+      warningCount: signingKeyValidation.warnings.length,
+      environment: process.env.NODE_ENV || 'local',
+    });
   }
 
   if (!govPayConfig.apiKey) {
@@ -222,7 +275,7 @@ function validateConfig(): void {
     errors.push('WEBHOOK_MAX_RETRIES must be between 0 and 10');
   }
 
-  if (isProduction && securityConfig.corsOrigins.length === 0) {
+  if (isProduction && networkConfig.corsOrigins.length === 0) {
     errors.push('CORS_ORIGINS must be configured for production (webhook endpoints should not allow * origin)');
   }
 
@@ -235,11 +288,11 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     validateConfig();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Configuration validation failed:', error);
+    console.error('Configuration validation failed:', error instanceof Error ? error.message : String(error));
     if (!isLocal) {
       process.exit(1);
     }
+    throw error;
   }
 }
 
@@ -251,7 +304,7 @@ const config = {
   govPay: govPayConfig,
   bacsWebhookConfig: bacsWebhookConfig,
   features: featureFlags,
-  security: securityConfig,
+  network: networkConfig,
   aws: awsConfig,
   isLocal,
   isProduction,

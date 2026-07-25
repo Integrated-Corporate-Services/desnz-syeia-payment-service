@@ -155,6 +155,66 @@ export async function closePool(): Promise<void> {
   }
 }
 
+export async function getClient(): Promise<PoolClient> {
+  const currentPool = await getPool();
+  return currentPool.connect();
+}
+
+export async function withTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await getClient();
+  
+  try {
+    await client.query('BEGIN');
+    logger.debug('[DB] Transaction started');
+    
+    const result = await callback(client);
+    
+    await client.query('COMMIT');
+    logger.debug('[DB] Transaction committed');
+    
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('[DB] Transaction rolled back', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    client.release();
+    logger.debug('[DB] Database client released');
+  }
+}
+
+export async function withTransactionIsolation<T>(
+  isolationLevel: 'READ COMMITTED' | 'REPEATABLE READ' | 'SERIALIZABLE',
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await getClient();
+  
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET TRANSACTION ISOLATION LEVEL ${isolationLevel}`);
+    logger.debug('[DB] Transaction started with isolation level', { isolationLevel });
+    
+    const result = await callback(client);
+    
+    await client.query('COMMIT');
+    logger.debug('[DB] Transaction committed');
+    
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('[DB] Transaction rolled back', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Check database connectivity
  * Used for health checks
@@ -184,6 +244,12 @@ const dbProxy: any = {
     const currentPool = await getPool();
     return currentPool.connect();
   },
+  getClient: async () => getClient(),
+  withTransaction: <T>(callback: (client: PoolClient) => Promise<T>) => withTransaction(callback),
+  withTransactionIsolation: <T>(
+    isolationLevel: 'READ COMMITTED' | 'REPEATABLE READ' | 'SERIALIZABLE',
+    callback: (client: PoolClient) => Promise<T>
+  ) => withTransactionIsolation(isolationLevel, callback),
   end: async () => closePool(),
   on: (event: any, listener: any) => {
     // This will be set up once pool is initialized
