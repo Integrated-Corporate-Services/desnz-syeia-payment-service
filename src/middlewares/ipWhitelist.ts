@@ -69,7 +69,11 @@ function expandIPv6(ipv6: string): number[] | null {
         ...right,
       ];
 
-      return groups.map((g) => parseInt(g || '0', 16));
+      const expanded = groups.map((g) => parseInt(g || '0', 16));
+      if (expanded.length !== 8 || expanded.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) {
+        return null;
+      }
+      return expanded;
     } else {
       const groups = ipv6.split(':');
       if (groups.length !== 8) return null;
