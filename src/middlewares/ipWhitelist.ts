@@ -109,9 +109,8 @@ function ipMatchesCIDR(ip: string, cidrRange: CIDRRange): boolean {
     }
 
     // Convert to 32-bit integers for comparison
-    const ipInt = (ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3];
-    const baseInt = (cidrRange.baseIp[0] << 24) | (cidrRange.baseIp[1] << 16) | 
-                    (cidrRange.baseIp[2] << 8) | cidrRange.baseIp[3];
+    const ipInt = (((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0);
+    const baseInt = (((cidrRange.baseIp[0] << 24) | (cidrRange.baseIp[1] << 16) | (cidrRange.baseIp[2] << 8) | cidrRange.baseIp[3]) >>> 0);
 
     const mask = cidrRange.prefixLength === 0 ? 0 : (0xffffffff << (32 - cidrRange.prefixLength)) >>> 0;
 
