@@ -15,7 +15,12 @@ interface RequestWithRawBody extends Request {
 const WEBHOOK_PATHS = ['/callback/payment', '/webhooks/bacs/payments'];
 
 export function registerMiddleware(app: Express): void {
-  app.set('trust proxy', true);
+  const trustedProxies = (process.env.TRUSTED_PROXIES || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  app.set('trust proxy', trustedProxies.length > 0 ? trustedProxies : false);
 
   app.use(requestContextMiddleware);
   app.use(corsMiddleware);
