@@ -19,7 +19,7 @@ jest.mock('../../src/database/db', () => ({
 
 // Mock process.exit to prevent tests from exiting
 // In test environment, just log instead of exiting
-const mockExit = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
   console.log(`[Test] process.exit(${code}) called but prevented in test environment`);
   return undefined as never;
 }) as any);
