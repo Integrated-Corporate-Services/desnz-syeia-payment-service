@@ -160,7 +160,9 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
       }
       throw new Error('JSON must contain username and password fields');
     } catch (err) {
-      throw new Error(`Failed to parse DB_CREDENTIALS as JSON: ${err}`);
+      throw new Error(
+        `Failed to parse DB_CREDENTIALS as JSON: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
   
