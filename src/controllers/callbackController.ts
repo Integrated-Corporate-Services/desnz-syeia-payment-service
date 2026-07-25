@@ -39,9 +39,10 @@ interface WebhookResponse {
   status?: string;
   webhookId: string;
   paymentId?: string;
-  message?: string;
+  message?: string;  // Business-friendly message for external provider
   isDuplicate?: boolean;
-  error?: string;
+  // Note: 'error' field removed from external responses for security
+  // Detailed errors are logged internally via logger, never exposed to GOV.UK Pay
   receivedAt?: string;
   [key: string]: unknown;
 }
@@ -164,7 +165,8 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         correlationId,
       });
 
-      return res.status(HTTP_STATUS.ACCEPTED).json({
+      // HTTP 200 OK: Duplicate already processed successfully
+      return res.status(HTTP_STATUS.OK).json({
         status: WEBHOOK_STATUS.DUPLICATE,
         webhookId,
         paymentId,
@@ -182,7 +184,8 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         correlationId,
       });
 
-      return res.status(HTTP_STATUS.ACCEPTED).json({
+      // HTTP 200 OK: Successfully received and stored for processing
+      return res.status(HTTP_STATUS.OK).json({
         status: 'success',
         webhookId: String(webhookId),
         paymentId: webhookEvent.resource_id,
@@ -191,7 +194,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       } as WebhookResponse);
     }
 
-    // Retryable error (e.g., SQS temporarily unavailable)
+    // Retryable error (e.g., database temporarily unavailable, SQS issue)
     if (result.retryable) {
       logger.warn('Webhook processing encountered retryable error', {
         webhookId,
@@ -200,12 +203,14 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         correlationId,
       });
 
+      // HTTP 202 Accepted: GOV.UK Pay docs require 2xx to stop retries
+      // We acknowledge receipt but indicate temporary processing failure
+      // Internal retry mechanisms (DLQ, manual intervention) will handle this
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.RETRYABLE_ERROR,
         webhookId,
         paymentId,
-        error: result.error,
-        message: 'Webhook processing scheduled for retry',
+        message: 'Webhook accepted but processing failed temporarily',
       } as WebhookResponse);
     }
 
@@ -217,12 +222,14 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       correlationId,
     });
 
+    // HTTP 202 Accepted: GOV.UK Pay docs require 2xx to stop retries
+    // We acknowledge receipt but indicate permanent processing failure
+    // Webhook moved to DLQ for manual investigation
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.PERMANENT_ERROR,
       webhookId,
       paymentId,
-      error: result.error,
-      message: 'Webhook moved to dead-letter queue',
+      message: 'Webhook accepted but cannot be processed',
     } as WebhookResponse);
     
   } catch (error) {
@@ -234,12 +241,14 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       correlationId,
     });
 
+    // HTTP 202 Accepted: GOV.UK Pay docs require 2xx to stop retries
+    // We acknowledge receipt but indicate unexpected processing error
+    // Webhook moved to DLQ for investigation
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.ERROR,
       webhookId,
       paymentId,
-      error: 'Unexpected error processing webhook',
-      message: 'Webhook will be retried',
+      message: 'Webhook accepted but processing encountered an error',
     } as WebhookResponse);
   }
 }

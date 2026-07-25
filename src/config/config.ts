@@ -86,9 +86,11 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
   }
 }
 
-function isProductionLikeEnvironment(nodeEnv: string): boolean {
-  const prodLikeEnvironments = ['production', 'staging', 'development'];
-  return prodLikeEnvironments.includes(nodeEnv.toLowerCase());
+function isProductionEnvironment(nodeEnv: string): boolean {
+  // CRITICAL-007 FIX: Only enforce Secrets Manager for PRODUCTION
+  // Development and staging environments can use plaintext for convenience
+  // but production MUST use Secrets Manager for PCI DSS 8.3 compliance
+  return nodeEnv.toLowerCase() === 'production';
 }
 
 function isSecretsManagerArn(value: string): boolean {
@@ -99,24 +101,31 @@ function validateProductionCredentialRequirements(
   dbCredentials: string | undefined,
   nodeEnv: string
 ): void {
-  const isProdLike = isProductionLikeEnvironment(nodeEnv);
+  const isProduction = isProductionEnvironment(nodeEnv);
   
-  if (!isProdLike) {
-    return;
+  // PRODUCTION: Enforce Secrets Manager ARN (PCI DSS 8.3)
+  if (isProduction) {
+    if (!dbCredentials) {
+      throw new Error(
+        'FATAL: DB_CREDENTIALS environment variable is required in production. ' +
+        'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
+      );
+    }
+    
+    if (!isSecretsManagerArn(dbCredentials)) {
+      throw new Error(
+        'FATAL: In production, DB_CREDENTIALS must be AWS Secrets Manager ARN. ' +
+        'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
+        'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+      );
+    }
   }
   
-  if (!dbCredentials) {
-    throw new Error(
-      `FATAL: DB_CREDENTIALS environment variable is required in ${nodeEnv} environment. ` +
-      'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
-    );
-  }
-  
-  if (!isSecretsManagerArn(dbCredentials)) {
-    throw new Error(
-      `FATAL: In ${nodeEnv} environment, DB_CREDENTIALS must be AWS Secrets Manager ARN. ` +
-      'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
-      'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+  // DEVELOPMENT/STAGING: Warn if using plaintext but allow it
+  if (!isProduction && dbCredentials && !isSecretsManagerArn(dbCredentials)) {
+    console.warn(
+      `[SECURITY WARNING] ${nodeEnv} environment using plaintext DB credentials. ` +
+      'Consider using AWS Secrets Manager ARN for enhanced security.'
     );
   }
 }
