@@ -5,7 +5,7 @@ import { validateSigningKeyConfiguration } from '../validators/signingKeyValidat
 dotenv.config();
 
 const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
-const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+const isProduction = ['prod', 'production'].includes((process.env.NODE_ENV || '').toLowerCase());
 
 if (isLocal) {
   const envFile = `.env.${process.env.NODE_ENV || 'local'}`;
@@ -87,7 +87,7 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
 }
 
 function isProductionEnvironment(nodeEnv: string): boolean {
-  return nodeEnv.toLowerCase() === 'production';
+  return ['prod', 'production'].includes(nodeEnv.toLowerCase());
 }
 
 function isSecretsManagerArn(value: string): boolean {
