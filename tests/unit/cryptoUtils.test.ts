@@ -26,7 +26,6 @@ import {
   verifyHmacSignature,
   isValidHexSignature 
 } from '../../src/utils/cryptoUtils';
-import { CRYPTO_CONFIG } from '../../src/constants/config.constants';
 
 describe('Crypto Utils', () => {
   beforeEach(() => {
@@ -160,7 +159,7 @@ describe('Crypto Utils', () => {
     describe('Odd-Length Hex Strings', () => {
       it('should reject odd-length hex string (31 chars)', () => {
         const oddHex = 'a'.repeat(31);
-        expect(isValidHexSignature(oddHex, 31)).toBe(true);
+        expect(isValidHexSignature(oddHex, 31)).toBe(false);
       });
 
       it('should reject odd-length hex for default SHA256 (63 chars)', () => {

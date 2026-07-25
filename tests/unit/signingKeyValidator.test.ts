@@ -1,6 +1,4 @@
 import { validateSigningKeyConfiguration } from '../../src/validators/signingKeyValidator';
-import { ERROR_CODES } from '../../src/constants/error.constants';
-import { CRYPTO_CONFIG } from '../../src/constants/config.constants';
 
 describe('Signing Key Validator', () => {
   const VALID_32_CHAR_KEY = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';

@@ -54,6 +54,11 @@ export function isValidHexSignature(signature: string, expectedLength: number = 
     return false;
   }
   
+  // Hex strings must be even length (2 hex chars = 1 byte)
+  if (signature.length % 2 !== 0) {
+    return false;
+  }
+  
   const hexPattern = /^[0-9a-fA-F]+$/;
   return hexPattern.test(signature);
 }
