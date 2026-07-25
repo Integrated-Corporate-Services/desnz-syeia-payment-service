@@ -206,13 +206,8 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       app = createTestApp();
     });
 
-    it('should deny access when no IP information available', async () => {
-      const response = await request(app).get('/bacs/health');
-
-      // Without X-Forwarded-For and with trust proxy, IP detection fails
-      // Should deny access
-      expect([403, 200]).toContain(response.status);
-    });
+    // Without X-Forwarded-For and with trust proxy, fall back IP should not be whitelisted
+    expect(response.status).toBe(403);
 
     it('should handle IPv6-mapped IPv4 addresses', async () => {
       const response = await request(app)
