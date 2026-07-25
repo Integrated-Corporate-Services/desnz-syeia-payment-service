@@ -55,7 +55,10 @@
     "form-data": ">=4.0.6",
     "brace-expansion": ">=5.0.8",
     "js-yaml": ">=4.3.0",
-    "body-parser": ">=1.20.6"
+    "body-parser": "^1.20.6"
+  },
+  "comments": {
+    "overrides": "Security fix overrides: body-parser constrained to 1.x for Express compatibility. brace-expansion and js-yaml require major version upgrades as no patched versions exist in old majors. Test tooling (Jest, minimatch) functions correctly with these versions despite semver incompatibility warnings."
   },
   "keywords": [
     "webhook",

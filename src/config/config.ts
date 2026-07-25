@@ -249,10 +249,7 @@ function validateConfig(): void {
   });
 
   if (signingKeyValidation.warnings && signingKeyValidation.warnings.length > 0) {
-    console.warn('Signing Key Configuration Warnings:');
-    signingKeyValidation.warnings.forEach(warning => {
-      console.warn(`   - ${warning}`);
-    });
+    console.warn(`Signing Key Configuration: ${signingKeyValidation.warnings.length} warning(s) detected. Review configuration for security compliance.`);
   }
 
   if (!govPayConfig.apiKey) {
