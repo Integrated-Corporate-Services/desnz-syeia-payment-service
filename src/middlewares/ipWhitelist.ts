@@ -195,7 +195,7 @@ export function ipWhitelistMiddleware(
     logger.debug('[IPWhitelist] Checking IP whitelist', {
       clientIp,
       allowedIps,
-      userAgent: req.get('User-Agent'),
+      user_agent: req.get('User-Agent'),
       path: req.path,
     });
 
@@ -213,7 +213,7 @@ export function ipWhitelistMiddleware(
       allowedIps,
       path: req.path,
       method: req.method,
-      userAgent: req.get('User-Agent'),
+      user_agent: req.get('User-Agent'),
       securityEvent: 'IP_WHITELIST_VIOLATION',
     });
 
