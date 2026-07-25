@@ -1,8 +1,8 @@
 // Integration Tests for Health Endpoint IP Whitelist Protection
 import request from 'supertest';
 import express, { Express } from 'express';
-import bacsWebhookRouter from '../../../src/routes/bacsWebhook';
-import callbackRouter from '../../../src/routes/callback';
+import bacsWebhookRouter from '../../src/routes/bacsWebhook';
+import callbackRouter from '../../src/routes/callback';
 
 describe('Health Endpoint IP Whitelist Integration', () => {
   let app: Express;
