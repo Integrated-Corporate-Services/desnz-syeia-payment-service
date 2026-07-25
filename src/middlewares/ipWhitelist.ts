@@ -99,7 +99,6 @@ function ipMatchesCIDR(ip: string, cidrRange: CIDRRange): boolean {
     if (!ipParts) return false;
 
     // Compare IPv6 addresses bit by bit
-    const bitsToCompare = cidrRange.prefixLength;
     let bitsCompared = 0;
 
       bitsCompared += bitsInThisGroup;
