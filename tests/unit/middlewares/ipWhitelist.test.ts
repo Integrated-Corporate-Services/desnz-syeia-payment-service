@@ -1,5 +1,27 @@
 // Unit Tests for IP Whitelist Middleware
 import { Request, Response, NextFunction } from 'express';
+
+// Mock logger BEFORE importing anything else
+const mockLogger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+};
+
+jest.mock('../../../src/utils/loggerHelper', () => jest.fn(() => mockLogger));
+
+jest.mock('../../../src/config/config', () => ({
+  __esModule: true,
+  default: {
+    server: { port: 3000, host: 'localhost', nodeEnv: 'test' },
+    security: {
+      healthEndpointAllowedIps: [],
+      healthEndpointBypassInLocal: true,
+    },
+  },
+}));
+
 import { ipWhitelistMiddleware } from '../../../src/middlewares/ipWhitelist';
 
 describe('IP Whitelist Middleware', () => {

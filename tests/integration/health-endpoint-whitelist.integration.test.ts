@@ -1,28 +1,69 @@
 // Integration Tests for Health Endpoint IP Whitelist Protection
+
+// Mock logger and database BEFORE importing anything else
+const mockLogger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+};
+
+jest.mock('../../src/utils/loggerHelper', () => jest.fn(() => mockLogger));
+
+jest.mock('../../src/database/db', () => ({
+  checkDatabaseConnectivity: jest.fn().mockResolvedValue({
+    connected: true,
+    latencyMs: 10,
+  }),
+}));
+
+// Mock process.exit to prevent tests from exiting
+// In test environment, just log instead of exiting
+const mockExit = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+  console.log(`[Test] process.exit(${code}) called but prevented in test environment`);
+  return undefined as never;
+}) as any);
+
+// Set required environment variables for config validation
+process.env.PORT = '3001';
+process.env.NODE_ENV = 'test';
+process.env.DB_HOST = 'localhost';
+process.env.DB_PORT = '5432';
+process.env.DB_NAME = 'test_db';
+process.env.DB_USER = 'test_user';
+process.env.DB_PASSWORD = 'test_password';
+process.env.BACS_WEBHOOK_SIGNING_KEY = 'test-bacs-key';
+process.env.GOVPAY_WEBHOOK_SIGNING_KEY = 'test-govpay-key';
+process.env.SQS_QUEUE_URL = 'http://localhost:4566/queue/test-queue';
+
 import request from 'supertest';
 import express, { Express } from 'express';
-import bacsWebhookRouter from '../../src/routes/bacsWebhook';
-import callbackRouter from '../../src/routes/callback';
 
 describe('Health Endpoint IP Whitelist Integration', () => {
   let app: Express;
 
-  beforeAll(() => {
-    app = express();
-
-    // Configure trust proxy (matches production setup)
-    app.set('trust proxy', true);
-
-    // Mount routers
-    app.use('/bacs', bacsWebhookRouter);
-    app.use('/callback', callbackRouter);
-  });
+  function createTestApp(): Express {
+    // Clear module cache to force reload of config
+    jest.resetModules();
+    
+    // Re-import with fresh config
+    const bacsRouter = require('../../src/routes/bacsWebhook').default;
+    const callbackRouter = require('../../src/routes/callback').default;
+    
+    const testApp = express();
+    testApp.set('trust proxy', true);
+    testApp.use('/bacs', bacsRouter);
+    testApp.use('/callback', callbackRouter);
+    
+    return testApp;
+  }
 
   describe('Local/Test Environment (Bypass Enabled)', () => {
     beforeAll(() => {
       process.env.NODE_ENV = 'local';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '10.0.0.0/8';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'true';
+      app = createTestApp();
     });
 
     it('should allow BACS health check from any IP in local environment', async () => {
@@ -47,9 +88,7 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '10.0.0.0/8,172.31.0.0/16';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
-
-      // Force reload config
-      jest.resetModules();
+      app = createTestApp();
     });
 
     it('should allow BACS health check from whitelisted IP', async () => {
@@ -94,6 +133,7 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '10.0.0.0/8,172.31.0.0/16,192.168.1.100';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
+      app = createTestApp();
     });
 
     it('should allow access from first CIDR range', async () => {
@@ -134,8 +174,9 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '172.31.10.5';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
+      const testApp = createTestApp();
 
-      const response = await request(app)
+      const response = await request(testApp)
         .get('/bacs/health')
         .set('X-Forwarded-For', '172.31.10.5');
 
@@ -146,9 +187,10 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '203.0.113.45';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
+      const testApp = createTestApp();
 
       // X-Forwarded-For: client, proxy1, proxy2
-      const response = await request(app)
+      const response = await request(testApp)
         .get('/callback/health')
         .set('X-Forwarded-For', '203.0.113.45, 172.31.1.1, 172.31.1.2');
 
@@ -161,6 +203,7 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '10.0.0.0/8';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
+      app = createTestApp();
     });
 
     it('should deny access when no IP information available', async () => {
@@ -185,10 +228,9 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       process.env.NODE_ENV = 'production';
       process.env.HEALTH_ENDPOINT_ALLOWED_IPS = '';
       process.env.HEALTH_ENDPOINT_BYPASS_IN_LOCAL = 'false';
+      const testApp = createTestApp();
 
-      jest.resetModules();
-
-      const response = await request(app)
+      const response = await request(testApp)
         .get('/bacs/health')
         .set('X-Forwarded-For', '10.0.0.50');
 

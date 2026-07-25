@@ -30,6 +30,10 @@ jest.mock('../../src/utils/loggerHelper', () => jest.fn(() => mockLogger));
 import { extractWebhookHeaders } from '../../src/middlewares/validateWebhookSignature';
 
 describe('extractWebhookHeaders', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('should extract Pay-Signature from headers and webhook_message_id from body', () => {
     const req = {
       headers: {
@@ -45,6 +49,7 @@ describe('extractWebhookHeaders', () => {
     expect(result).toEqual({
       signature: 'test-signature-123',
       webhookId: 'evt_test_12345',
+      isValidWebhookId: false, // 'evt_test_12345' is not a valid UUID
     });
   });
 
@@ -63,6 +68,7 @@ describe('extractWebhookHeaders', () => {
     expect(result).toEqual({
       signature: 'first-signature',
       webhookId: 'evt_test_12345',
+      isValidWebhookId: false, // 'evt_test_12345' is not a valid UUID
     });
   });
 
@@ -77,6 +83,7 @@ describe('extractWebhookHeaders', () => {
     expect(result).toEqual({
       signature: null,
       webhookId: null,
+      isValidWebhookId: false,
     });
   });
 
@@ -93,6 +100,7 @@ describe('extractWebhookHeaders', () => {
     expect(result).toEqual({
       signature: 'test-signature-123',
       webhookId: null,
+      isValidWebhookId: false,
     });
   });
 
@@ -111,6 +119,71 @@ describe('extractWebhookHeaders', () => {
     expect(result).toEqual({
       signature: null,
       webhookId: 'evt_test_12345',
+      isValidWebhookId: false, // 'evt_test_12345' is not a valid UUID
+    });
+  });
+
+  it('should validate webhook_message_id as valid UUID (HIGH-005 fix)', () => {
+    const req = {
+      headers: {
+        'pay-signature': 'test-signature-123',
+      },
+      body: {
+        webhook_message_id: '550e8400-e29b-41d4-a716-446655440000', // Valid UUID v4
+      },
+    };
+
+    const result = extractWebhookHeaders(req);
+
+    expect(result).toEqual({
+      signature: 'test-signature-123',
+      webhookId: '550e8400-e29b-41d4-a716-446655440000',
+      isValidWebhookId: true, // Valid UUID
+    });
+  });
+
+  it('should reject invalid UUID format in webhook_message_id', () => {
+    const req = {
+      headers: {
+        'pay-signature': 'test-signature-123',
+      },
+      body: {
+        webhook_message_id: 'not-a-valid-uuid-12345',
+      },
+    };
+
+    const result = extractWebhookHeaders(req);
+
+    expect(result).toEqual({
+      signature: 'test-signature-123',
+      webhookId: 'not-a-valid-uuid-12345',
+      isValidWebhookId: false, // Invalid UUID format
+    });
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      '[Webhook] Invalid webhook_message_id format (not a valid UUID)',
+      {
+        webhookId: 'not-a-valid-uuid-12345',
+        type: 'string',
+      }
+    );
+  });
+
+  it('should handle numeric webhook_message_id as invalid', () => {
+    const req: any = {
+      headers: {
+        'pay-signature': 'test-signature-123',
+      },
+      body: {
+        webhook_message_id: 12345,
+      },
+    };
+
+    const result = extractWebhookHeaders(req);
+
+    expect(result).toEqual({
+      signature: 'test-signature-123',
+      webhookId: 12345,
+      isValidWebhookId: false, // Not a string UUID
     });
   });
 });
