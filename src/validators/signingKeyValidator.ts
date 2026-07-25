@@ -67,7 +67,7 @@ function validateKeyStrength(
   key: string,
   keyName: string
 ): SigningKeyValidationResult {
-  const { FORBIDDEN_KEY_VALUES, MIN_UNIQUE_CHARS_32, MIN_UNIQUE_CHARS_64, MIN_SIGNING_KEY_LENGTH } = CRYPTO_CONFIG;
+  const { FORBIDDEN_KEY_VALUES, MIN_UNIQUE_CHARS_32, MIN_UNIQUE_CHARS_64 } = CRYPTO_CONFIG;
   const trimmedKey = key.trim();
   const lowerKey = trimmedKey.toLowerCase();
   
@@ -76,7 +76,7 @@ function validateKeyStrength(
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_FORBIDDEN_VALUE,
       errorMessage:
-        `FATAL: ${keyName} is a forbidden weak value ('${trimmedKey.substring(0, 10)}...'). ` +
+        `FATAL: ${keyName} is a forbidden weak value. ` +
         `Weak keys like 'secret', 'password', 'test' are easily guessed. ` +
         `Generate a strong key with: openssl rand -hex 64`,
     };

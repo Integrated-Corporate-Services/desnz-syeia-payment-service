@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
 import { computeHmacSignature, constantTimeSignatureCompare } from '../utils/cryptoUtils';
-import config from '../config/config';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
+import config from '../config/config';
 import {
   BACS_SIGNATURE_VERSION,
   TIMESTAMP_WINDOW_MS,

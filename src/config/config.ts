@@ -1,6 +1,7 @@
 const dotenv = require('dotenv');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 import { validateSigningKeyConfiguration } from '../validators/signingKeyValidator';
+import getLogger from '../utils/loggerHelper';
 
 dotenv.config();
 
@@ -116,7 +117,6 @@ function validateProductionCredentialRequirements(
     throw new Error(
       `FATAL: In ${nodeEnv} environment, DB_CREDENTIALS must be AWS Secrets Manager ARN. ` +
       'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
-      `Current value type: ${dbCredentials.substring(0, 10)}... ` +
       'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
     );
   }
@@ -145,8 +145,7 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
       }
     } catch {
       throw new Error(
-        'DB_CREDENTIALS must be either AWS Secrets Manager ARN or valid JSON ' +
-        'with username and password fields.'
+        'DB_CREDENTIALS error'
       );
     }
   }
@@ -244,11 +243,21 @@ export const awsConfig = {
 function validateConfig(): void {
   const errors: string[] = [];
 
-  validateSigningKeyConfiguration({
+  const signingKeyValidation = validateSigningKeyConfiguration({
     govPaySigningKey: webhookConfig.signingKey,
     bacsSigningKey: bacsWebhookConfig.signingKey,
     environment: process.env.NODE_ENV || 'local',
   });
+
+  
+  if (signingKeyValidation.warnings && signingKeyValidation.warnings.length > 0) {
+    const logger = getLogger(module);
+    logger.warn('Signing key configuration warnings detected', {
+      warnings: signingKeyValidation.warnings,
+      warningCount: signingKeyValidation.warnings.length,
+      environment: process.env.NODE_ENV || 'local',
+    });
+  }
 
   if (!govPayConfig.apiKey) {
     errors.push('GOVPAY_API_KEY is required');

@@ -41,7 +41,7 @@ export function computeHmacSignature(
 ): string {
   return crypto
     .createHmac(CRYPTO_CONFIG.HMAC_ALGORITHM, signingKey)
-    .update(message, 'utf-8')
+    .update(message, 'utf8')
     .digest(outputFormat);
 }
 
