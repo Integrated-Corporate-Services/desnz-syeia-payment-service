@@ -14,7 +14,7 @@ export const globalRateLimiter = rateLimit({
 
 export const webhookRateLimiter = rateLimit({
   windowMs: config.server.rateLimitWindowMs,
-  max: Math.floor(config.server.rateLimitMax / 2),
+  max: Math.max(1, Math.floor(config.server.rateLimitMax / 2)), // Ensure minimum of 1
   message: { error: 'Too many webhook requests from this IP, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,

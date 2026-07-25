@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
 import { computeHmacSignature, constantTimeSignatureCompare } from '../utils/cryptoUtils';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
+import { CRYPTO_CONFIG } from '../constants/config.constants';
 import config from '../config/config';
 import {
   BACS_SIGNATURE_VERSION,
@@ -36,6 +37,17 @@ function verifyBACSSignature(
   signingSecret: string
 ): boolean {
   try {
+    // DoS protection: Reject signatures that are too long before any buffer operations
+    // HMAC-SHA256 produces exactly 64 hex characters (32 bytes * 2)
+    if (signature.length > CRYPTO_CONFIG.SHA256_HEX_LENGTH) {
+      logger.warn('[BACSWebhook] Signature length exceeds maximum', {
+        received_length: signature.length,
+        max_length: CRYPTO_CONFIG.SHA256_HEX_LENGTH,
+        error_category: ERROR_CATEGORIES.VALIDATION,
+      });
+      return false;
+    }
+
     const signedMessage = `${timestamp}.${body}`;
     const expectedSignature = computeHmacSignature(signedMessage, signingSecret, 'hex');
     
