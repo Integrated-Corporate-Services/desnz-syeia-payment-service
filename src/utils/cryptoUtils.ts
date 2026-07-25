@@ -20,7 +20,8 @@ export function constantTimeSignatureCompare(
       const paddedReceived = Buffer.alloc(maxLength);
       expectedBuf.copy(paddedExpected);
       receivedBuf.copy(paddedReceived);
-      return crypto.timingSafeEqual(paddedExpected, paddedReceived);
+      crypto.timingSafeEqual(paddedExpected, paddedReceived);
+      return false;
     }
     
     return crypto.timingSafeEqual(expectedBuf, receivedBuf);
@@ -44,11 +45,33 @@ export function computeHmacSignature(
     .digest(outputFormat);
 }
 
+export function isValidHexSignature(signature: string, expectedLength: number = CRYPTO_CONFIG.SHA256_HEX_LENGTH): boolean {
+  if (!signature || typeof signature !== 'string') {
+    return false;
+  }
+  
+  if (signature.length !== expectedLength) {
+    return false;
+  }
+  
+  const hexPattern = /^[0-9a-fA-F]+$/;
+  return hexPattern.test(signature);
+}
+
 export function verifyHmacSignature(
   receivedSignature: string,
   message: string,
   signingKey: string
 ): boolean {
+  if (!isValidHexSignature(receivedSignature)) {
+    logger.warn('[Webhook] Invalid signature format', {
+      signatureLength: receivedSignature?.length || 0,
+      expectedLength: CRYPTO_CONFIG.SHA256_HEX_LENGTH,
+      error_category: ERROR_CATEGORIES.CRYPTOGRAPHY,
+    });
+    return false;
+  }
+  
   const expectedSignature = computeHmacSignature(message, signingKey, 'hex');
   return constantTimeSignatureCompare(expectedSignature, receivedSignature, 'hex');
 }
