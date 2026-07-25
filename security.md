@@ -152,7 +152,7 @@ The DESNZ SYEIA Payment Service was assessed against OWASP Top 10 2021, CWE Top 
 
 |----------|----------|---------|------------|
 
-| `POST /bacs/payments` | BACS | Bank payment webhooks | 🔴 CRITICAL |
+| `POST /webhooks/bacs/payments` | BACS | Bank payment webhooks | 🔴 CRITICAL |
 
 | `POST /callback/payment` | GOV.UK Pay | Card payment webhooks | 🔴 CRITICAL |
 
