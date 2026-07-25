@@ -174,15 +174,8 @@ export function ipWhitelistMiddleware(
     logger.warn('[IPWhitelist] No allowed IPs configured - this endpoint will be blocked for all IPs');
   }
 
-  // Pre-parse CIDR ranges for performance
-  const parsedRanges = allowedIps
-    .filter((ip) => ip.includes('/'))
-    .map(parseCIDR)
-    .filter((range): range is CIDRRange => range !== null);
-
   logger.info('[IPWhitelist] IP whitelist initialized', { 
     allowedIps,
-    parsedRanges: parsedRanges.length,
     bypassInLocal,
   });
 
