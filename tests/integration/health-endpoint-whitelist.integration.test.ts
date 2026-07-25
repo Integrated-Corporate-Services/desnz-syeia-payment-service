@@ -206,8 +206,10 @@ describe('Health Endpoint IP Whitelist Integration', () => {
       app = createTestApp();
     });
 
-    // Without X-Forwarded-For and with trust proxy, fall back IP should not be whitelisted
-    expect(response.status).toBe(403);
+    it('should deny requests without X-Forwarded-For when client IP is not whitelisted', async () => {
+      const response = await request(app).get('/callback/health');
+      expect(response.status).toBe(403);
+    });
 
     it('should handle IPv6-mapped IPv4 addresses', async () => {
       const response = await request(app)
