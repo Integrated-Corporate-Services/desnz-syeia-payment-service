@@ -205,7 +205,7 @@ export function ipWhitelistMiddleware(
     });
 
     if (isIpWhitelisted(clientIp, allowedIps)) {
-      logger.info('[IPWhitelist] IP whitelist check passed', { 
+      logger.debug('[IPWhitelist] IP whitelist check passed', { 
         clientIp,
         path: req.path,
       });
