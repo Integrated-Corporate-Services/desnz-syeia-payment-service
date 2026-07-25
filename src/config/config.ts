@@ -1,7 +1,6 @@
 const dotenv = require('dotenv');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 import { validateSigningKeyConfiguration } from '../validators/signingKeyValidator';
-import getLogger from '../utils/loggerHelper';
 
 dotenv.config();
 
@@ -249,13 +248,10 @@ function validateConfig(): void {
     environment: process.env.NODE_ENV || 'local',
   });
 
-  
   if (signingKeyValidation.warnings && signingKeyValidation.warnings.length > 0) {
-    const logger = getLogger(module);
-    logger.warn('Signing key configuration warnings detected', {
-      warnings: signingKeyValidation.warnings,
-      warningCount: signingKeyValidation.warnings.length,
-      environment: process.env.NODE_ENV || 'local',
+    console.warn('Signing Key Configuration Warnings:');
+    signingKeyValidation.warnings.forEach(warning => {
+      console.warn(`   - ${warning}`);
     });
   }
 
