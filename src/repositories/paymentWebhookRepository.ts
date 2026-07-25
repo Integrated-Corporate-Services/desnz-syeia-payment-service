@@ -15,6 +15,8 @@
  */
 
 import db from '../database/db';
+import { withTransaction } from '../database/db';
+import { PoolClient } from 'pg';
 import getLogger from '../utils/loggerHelper';
 import { WEBHOOK_QUERIES } from '../constants/sql.constants';
 
@@ -52,48 +54,50 @@ interface WebhookCreateResult {
  * @throws {Error} If database insertion fails
  */
 export async function createWebhook(data: WebhookData): Promise<WebhookCreateResult> {
-  try {
-    const result = await db.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
-      data.webhook_id,
-      data.payment_id,
-      data.event_type,
-      data.status,
-      data.raw_payload,
-      data.created_by || 'inbound-event-receiver',
-      data.correlation_id,
-    ]);
+  return withTransaction(async (client: PoolClient) => {
+    try {
+      const result = await client.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
+        data.webhook_id,
+        data.payment_id,
+        data.event_type,
+        data.status,
+        data.raw_payload,
+        data.created_by || 'inbound-event-receiver',
+        data.correlation_id,
+      ]);
 
-    const row = result.rows?.[0];
-    const isDuplicate = row?.is_duplicate || false;
+      const row = result.rows?.[0];
+      const isDuplicate = row?.is_duplicate || false;
 
-    if (isDuplicate) {
-      logger.info('[WebhookRepository] Duplicate webhook detected via ON CONFLICT', {
+      if (isDuplicate) {
+        logger.info('[WebhookRepository] Duplicate webhook detected via ON CONFLICT', {
+          webhookId: data.webhook_id,
+          paymentId: data.payment_id,
+          existingStatus: row?.status,
+        });
+        return {
+          isDuplicate: true,
+          status: row?.status,
+        };
+      }
+
+      logger.info('[WebhookRepository] Webhook record created in transaction', {
         webhookId: data.webhook_id,
         paymentId: data.payment_id,
-        existingStatus: row?.status,
+        enqueuedAt: null,
       });
+
       return {
-        isDuplicate: true,
-        status: row?.status,
+        isDuplicate: false,
       };
+    } catch (error) {
+      logger.error('[WebhookRepository] Error creating webhook record (will be rolled back)', {
+        error: error instanceof Error ? error.message : String(error),
+        webhookId: data.webhook_id,
+      });
+      throw error;
     }
-
-    logger.info('[WebhookRepository] Webhook record created', {
-      webhookId: data.webhook_id,
-      paymentId: data.payment_id,
-      enqueuedAt: null,  // Will be updated by pay-callback-relay
-    });
-
-    return {
-      isDuplicate: false,
-    };
-  } catch (error) {
-    logger.error('[WebhookRepository] Error creating webhook record', {
-      error: error instanceof Error ? error.message : String(error),
-      webhookId: data.webhook_id,
-    });
-    throw error;
-  }
+  });
 }
 
 /**
