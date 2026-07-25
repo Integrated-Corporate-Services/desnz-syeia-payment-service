@@ -239,7 +239,10 @@ const isProduction = process.env.NODE_ENV === 'production';
 export const securityConfig = {
   corsOrigins: getConfigValue('CORS_ORIGINS', isProduction ? '' : '*').split(',').filter(Boolean),
   trustedProxies: getConfigValue('TRUSTED_PROXIES', '').split(',').filter(Boolean),
-  healthEndpointAllowedIps: getConfigValue('HEALTH_ENDPOINT_ALLOWED_IPS', '')
+  healthEndpointAllowedIps: (isProduction
+    ? getConfigValue('HEALTH_ENDPOINT_ALLOWED_IPS')
+    : getConfigValue('HEALTH_ENDPOINT_ALLOWED_IPS', '')
+  )
     .split(',')
     .map((ip: string) => ip.trim())
     .filter(Boolean),
