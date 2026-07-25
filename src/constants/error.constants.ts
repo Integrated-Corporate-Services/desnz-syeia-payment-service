@@ -68,6 +68,8 @@ export enum ERROR_CODES {
   SIGNING_KEY_NOT_CONFIGURED = 'SIGNING_KEY_NOT_CONFIGURED',
   SIGNING_KEY_TOO_SHORT = 'SIGNING_KEY_TOO_SHORT',
   SIGNING_KEY_WEAK = 'SIGNING_KEY_WEAK',
+  SIGNING_KEY_FORBIDDEN_VALUE = 'SIGNING_KEY_FORBIDDEN_VALUE',
+  SIGNING_KEY_INSUFFICIENT_ENTROPY = 'SIGNING_KEY_INSUFFICIENT_ENTROPY',
   
   // Authorization Errors (403)
   ACCESS_DENIED = 'ACCESS_DENIED',
@@ -166,6 +168,8 @@ export const ERROR_MESSAGES = {
   MISSING_SIGNATURE: 'Webhook signature header is missing',
   SIGNATURE_VERIFICATION_FAILED: 'Failed to verify webhook signature',
   SIGNING_KEY_NOT_CONFIGURED: 'Webhook signing key not configured',
+  SIGNING_KEY_FORBIDDEN_VALUE: 'Signing key is a forbidden weak value',
+  SIGNING_KEY_INSUFFICIENT_ENTROPY: 'Signing key has insufficient entropy',
   
   // Resource
   WEBHOOK_NOT_FOUND: (id: string) => `Webhook ${id} not found`,

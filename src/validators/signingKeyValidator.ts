@@ -43,13 +43,17 @@ function validateKeyLength(
     return {
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_TOO_SHORT,
-      errorMessage: `${keyName} does not meet minimum length requirements for production.`,
+      errorMessage: 
+        `FATAL: ${keyName} does not meet minimum length requirements for production. ` +
+        `Key must be at least ${MIN_SIGNING_KEY_LENGTH} characters. ` +
+        `Generate a strong key with: openssl rand -hex 64`,
     };
   }
   
   if (trimmedKey.length < RECOMMENDED_SIGNING_KEY_LENGTH) {
     warnings.push(
-      `${keyName} is shorter than recommended length.`
+      `${keyName} is ${trimmedKey.length} characters (recommended: ${RECOMMENDED_SIGNING_KEY_LENGTH}+). ` +
+      `Generate a stronger key with: openssl rand -hex 64`
     );
   }
   
@@ -57,6 +61,43 @@ function validateKeyLength(
     isValid: true,
     warnings: warnings.length > 0 ? warnings : undefined,
   };
+}
+
+function validateKeyStrength(
+  key: string,
+  keyName: string
+): SigningKeyValidationResult {
+  const { FORBIDDEN_KEY_VALUES, MIN_UNIQUE_CHARS_32, MIN_UNIQUE_CHARS_64, MIN_SIGNING_KEY_LENGTH } = CRYPTO_CONFIG;
+  const trimmedKey = key.trim();
+  const lowerKey = trimmedKey.toLowerCase();
+  
+  if ((FORBIDDEN_KEY_VALUES as readonly string[]).includes(lowerKey)) {
+    return {
+      isValid: false,
+      errorCode: ERROR_CODES.SIGNING_KEY_FORBIDDEN_VALUE,
+      errorMessage:
+        `FATAL: ${keyName} is a forbidden weak value ('${trimmedKey.substring(0, 10)}...'). ` +
+        `Weak keys like 'secret', 'password', 'test' are easily guessed. ` +
+        `Generate a strong key with: openssl rand -hex 64`,
+    };
+  }
+  
+  const uniqueChars = new Set(trimmedKey).size;
+  const minUnique = trimmedKey.length >= 64 ? MIN_UNIQUE_CHARS_64 : MIN_UNIQUE_CHARS_32;
+  
+  if (uniqueChars < minUnique) {
+    return {
+      isValid: false,
+      errorCode: ERROR_CODES.SIGNING_KEY_INSUFFICIENT_ENTROPY,
+      errorMessage:
+        `FATAL: ${keyName} has insufficient entropy. ` +
+        `Found ${uniqueChars} unique characters, need at least ${minUnique}. ` +
+        `Keys with repetitive patterns (e.g., 'aaaa...') can be brute-forced. ` +
+        `Generate a strong key with: openssl rand -hex 64`,
+    };
+  }
+  
+  return { isValid: true };
 }
 
 export function validateSigningKeyConfiguration(
@@ -86,6 +127,16 @@ export function validateSigningKeyConfiguration(
   const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', isProduction);
   if (!bacsLengthResult.isValid) {
     throw new Error(bacsLengthResult.errorMessage);
+  }
+  
+  const govPayStrengthResult = validateKeyStrength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY');
+  if (!govPayStrengthResult.isValid) {
+    throw new Error(govPayStrengthResult.errorMessage);
+  }
+  
+  const bacsStrengthResult = validateKeyStrength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY');
+  if (!bacsStrengthResult.isValid) {
+    throw new Error(bacsStrengthResult.errorMessage);
   }
   
   const allWarnings = [
