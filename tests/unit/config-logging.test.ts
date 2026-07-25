@@ -8,145 +8,224 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('Config Logging - HIGH-007 Fix', () => {
-  const configFilePath = path.join(__dirname, '../../src/config/config.ts');
+  // ✅ IMPROVED: Robust path resolution following industry standards
+  // Uses fallback strategy instead of string matching for better reliability
+  const findConfigFilePath = (): string => {
+    const possiblePaths = [
+      // Strategy 1: Relative from test file location (local development)
+      path.join(__dirname, '../../src/config/config.ts'),
+      
+      // Strategy 2: Relative from compiled test location (CI/CD)
+      path.join(__dirname, '../../../src/config/config.ts'),
+      
+      // Strategy 3: From process.cwd() (npm test execution context)
+      path.join(process.cwd(), 'src/config/config.ts'),
+      
+      // Strategy 4: Absolute path resolution from __dirname
+      path.resolve(__dirname, '../../src/config/config.ts'),
+    ];
+    
+    // Find the first path that exists (fail-fast approach)
+    for (const filePath of possiblePaths) {
+      if (fs.existsSync(filePath)) {
+        return filePath;
+      }
+    }
+    
+    // Provide detailed error for debugging
+    throw new Error(
+      `❌ Config file not found. Searched paths:\n${possiblePaths.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}\n` +
+      `\nDebug Info:\n` +
+      `  - __dirname: ${__dirname}\n` +
+      `  - process.cwd(): ${process.cwd()}\n` +
+      `  - NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`
+    );
+  };
+  
+  // Test constants following DRY principle
+  const CONFIG_FILE_PATH = findConfigFilePath();
+  const MIN_SECURITY_WARNINGS = 2;
+  const MIN_LOGGER_CALLS = 3;
+  const EXPECTED_HIGH_007_MARKERS = 3;
+  const MAX_LINES_BETWEEN_MARKER_AND_CALL = 5;
+  
   let configSource: string;
 
   beforeAll(() => {
-    // Read file once for all tests
-    configSource = fs.readFileSync(configFilePath, 'utf-8');
+    // Arrange: Read file once for all tests (performance optimization)
+    try {
+      configSource = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+    } catch (error) {
+      throw new Error(
+        `Failed to read config file at ${CONFIG_FILE_PATH}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   });
 
+  // ============================================
+  // HELPER FUNCTIONS (Following DRY & SOLID principles)
+  // ============================================
+
+  /**
+   * Assert that a pattern does NOT appear in the source code
+   * @param pattern - Regex pattern to search for
+   * @param errorMessage - Error message prefix
+   */
+  const assertNoMatches = (pattern: RegExp, errorMessage: string): void => {
+    const matches = configSource.match(pattern);
+    if (matches) {
+      fail(`${errorMessage}: Found ${matches.length} occurrence(s)\n  - ${matches.join('\n  - ')}`);
+    }
+    expect(matches).toBeNull();
+  };
+
+  /**
+   * Assert that a pattern DOES appear in the source code
+   * @param pattern - Regex pattern to search for
+   * @param errorMessage - Error message if not found
+   * @param minCount - Minimum expected occurrences
+   */
+  const assertHasMatches = (pattern: RegExp, errorMessage: string, minCount: number = 1): RegExpMatchArray => {
+    const matches = configSource.match(pattern);
+    expect(matches).not.toBeNull();
+    if (!matches || matches.length < minCount) {
+      fail(`${errorMessage}: Expected at least ${minCount}, found ${matches?.length || 0}`);
+    }
+    expect(matches.length).toBeGreaterThanOrEqual(minCount);
+    return matches;
+  };
+
+  /**
+   * Remove all comments from source code for accurate pattern matching
+   * @param source - Source code to process
+   */
+  const removeComments = (source: string): string => {
+    return source
+      .replace(/\/\/.*$/gm, '')  // Remove single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, '');  // Remove multi-line comments
+  };
+
+  // ============================================
+  // TEST SUITES
+  // ============================================
+
   describe('🔒 Source code compliance', () => {
+    // AAA Pattern: Arrange-Act-Assert
     it('should NOT contain console.error() calls', () => {
-      // Check for console.error (not in comments)
+      // Arrange: Define pattern to search for
       const consoleErrorPattern = /^\s*console\.error\(/gm;
-      const matches = configSource.match(consoleErrorPattern);
       
-      if (matches) {
-        fail(`Found ${matches.length} console.error() call(s): ${matches.join(', ')}`);
-      }
-      expect(matches).toBeNull();
+      // Act & Assert: Verify no console.error() exists
+      assertNoMatches(consoleErrorPattern, 'Console.error() calls found');
     });
 
     it('should NOT contain console.warn() calls', () => {
-      // Check for console.warn (not in comments)
       const consoleWarnPattern = /^\s*console\.warn\(/gm;
-      const matches = configSource.match(consoleWarnPattern);
-      
-      if (matches) {
-        fail(`Found ${matches.length} console.warn() call(s): ${matches.join(', ')}`);
-      }
-      expect(matches).toBeNull();
+      assertNoMatches(consoleWarnPattern, 'Console.warn() calls found');
     });
 
     it('should NOT contain console.log() calls', () => {
-      // Check for console.log (not in comments)
       const consoleLogPattern = /^\s*console\.log\(/gm;
-      const matches = configSource.match(consoleLogPattern);
-      
-      if (matches) {
-        fail(`Found ${matches.length} console.log() call(s): ${matches.join(', ')}`);
-      }
-      expect(matches).toBeNull();
+      assertNoMatches(consoleLogPattern, 'Console.log() calls found');
     });
 
     it('should NOT contain console.info() or console.debug() calls', () => {
       const consoleInfoPattern = /^\s*console\.(info|debug)\(/gm;
-      const matches = configSource.match(consoleInfoPattern);
-      
-      if (matches) {
-        fail(`Found ${matches.length} console.info/debug() call(s): ${matches.join(', ')}`);
-      }
-      expect(matches).toBeNull();
+      assertNoMatches(consoleInfoPattern, 'Console.info() or console.debug() calls found');
     });
 
     it('should import logger from loggerHelper', () => {
-      // Check for proper logger import
-      expect(configSource).toMatch(/import\s+getLogger\s+from\s+['"]\.\.\/utils\/loggerHelper['"]/);
+      const loggerImportPattern = /import\s+getLogger\s+from\s+['"]\.\.\/utils\/loggerHelper['"]/;
+      assertHasMatches(loggerImportPattern, 'Logger import not found');
     });
 
     it('should initialize logger instance with module', () => {
-      // Check for logger initialization with module parameter
-      expect(configSource).toMatch(/const\s+logger\s*=\s*getLogger\(module\)/);
+      const loggerInitPattern = /const\s+logger\s*=\s*getLogger\(module\)/;
+      assertHasMatches(loggerInitPattern, 'Logger initialization with module not found');
     });
 
     it('should use logger.error instead of console.error', () => {
-      // Check for logger.error usage
-      expect(configSource).toMatch(/logger\.error\(['"]Configuration validation failed['"]/);
+      const loggerErrorPattern = /logger\.error\(['"]Configuration validation failed['"]/;
+      assertHasMatches(loggerErrorPattern, 'logger.error for configuration validation not found');
     });
 
     it('should use logger.warn instead of console.warn for security warnings', () => {
-      // Check for logger.warn usage with security warnings
-      expect(configSource).toMatch(/logger\.warn\(/);
-      expect(configSource).toMatch(/\[SECURITY WARNING\]/);
+      // Assert: Verify logger.warn is used
+      assertHasMatches(/logger\.warn\(/, 'logger.warn not found');
+      assertHasMatches(/\[SECURITY WARNING\]/, 'Security warning marker not found');
       
-      // Should have at least 2 security warnings
-      const securityWarnings = configSource.match(/\[SECURITY WARNING\]/g);
-      expect(securityWarnings).not.toBeNull();
-      expect(securityWarnings!.length).toBeGreaterThanOrEqual(2);
+      // Assert: Verify minimum security warnings exist
+      const securityWarnings = assertHasMatches(
+        /\[SECURITY WARNING\]/g,
+        'Insufficient security warnings',
+        MIN_SECURITY_WARNINGS
+      );
+      expect(securityWarnings.length).toBeGreaterThanOrEqual(MIN_SECURITY_WARNINGS);
     });
 
     it('should use structured logging format', () => {
-      // Check that logger calls have structured metadata (object as second parameter)
-      // Pattern: logger.error('message', { key: value })
+      // Arrange: Pattern for structured logging (logger.error/warn with object parameter)
       const structuredLogPattern = /logger\.(error|warn)\([^,]+,\s*\{/g;
-      const matches = configSource.match(structuredLogPattern);
       
-      expect(matches).not.toBeNull();
-      expect(matches!.length).toBeGreaterThanOrEqual(3);
+      // Assert: Verify structured logging is used
+      const matches = assertHasMatches(
+        structuredLogPattern,
+        'Structured logging format not found',
+        MIN_LOGGER_CALLS
+      );
+      expect(matches.length).toBeGreaterThanOrEqual(MIN_LOGGER_CALLS);
     });
 
     it('should include environment context in logs', () => {
-      // Check that logs include environment information
-      expect(configSource).toMatch(/environment:\s*process\.env\.NODE_ENV/);
-      
-      // Count occurrences - should be in all logger calls
+      // Assert: Verify environment context exists
       const envContextPattern = /environment:\s*process\.env\.NODE_ENV/g;
-      const matches = configSource.match(envContextPattern);
-      expect(matches).not.toBeNull();
-      expect(matches!.length).toBeGreaterThanOrEqual(3);
+      const matches = assertHasMatches(
+        envContextPattern,
+        'Environment context in logs not found',
+        MIN_LOGGER_CALLS
+      );
+      expect(matches.length).toBeGreaterThanOrEqual(MIN_LOGGER_CALLS);
     });
 
     it('should NOT have eslint-disable-next-line no-console directives', () => {
-      // Check for eslint disable comments (should be removed)
       const eslintDisablePattern = /eslint-disable.*no-console/i;
-      const matches = configSource.match(eslintDisablePattern);
-      
-      if (matches) {
-        fail(`Found eslint-disable comment for console: ${matches.join(', ')}`);
-      }
-      expect(matches).toBeNull();
+      assertNoMatches(eslintDisablePattern, 'ESLint disable directive for console found');
     });
   });
 
   describe('✅ HIGH-007 fix markers', () => {
     it('should have HIGH-007 fix comments in code', () => {
-      // Check for HIGH-007 fix comments
-      expect(configSource).toMatch(/FIX HIGH-007/);
+      assertHasMatches(/FIX HIGH-007/, 'HIGH-007 fix markers not found');
     });
 
     it('should have exactly 3 HIGH-007 fix markers (one for each console replacement)', () => {
-      const fixComments = configSource.match(/FIX HIGH-007/g);
-      expect(fixComments).not.toBeNull();
-      expect(fixComments!.length).toBe(3);
+      const fixComments = assertHasMatches(
+        /FIX HIGH-007/g,
+        'HIGH-007 fix markers not found',
+        EXPECTED_HIGH_007_MARKERS
+      );
+      expect(fixComments.length).toBe(EXPECTED_HIGH_007_MARKERS);
     });
 
     it('should explain the fix in comments', () => {
-      // Check that fix comments explain what was changed
-      expect(configSource).toMatch(/Use structured logger instead of console/);
+      assertHasMatches(/Use structured logger instead of console/, 'Fix explanation not found');
       
-      // Each HIGH-007 marker should have explanation
-      const explanations = configSource.match(/Use structured logger instead of console\.(warn|error)/g);
-      expect(explanations).not.toBeNull();
-      expect(explanations!.length).toBeGreaterThanOrEqual(2);
+      // Verify explanations mention specific console methods replaced
+      const explanations = assertHasMatches(
+        /Use structured logger instead of console\.(warn|error)/g,
+        'Detailed fix explanations not found',
+        MIN_SECURITY_WARNINGS
+      );
+      expect(explanations.length).toBeGreaterThanOrEqual(MIN_SECURITY_WARNINGS);
     });
 
     it('should have fix markers before each logger call', () => {
-      // Verify HIGH-007 comments appear before logger.warn and logger.error
+      // Arrange: Parse source into lines
       const lines = configSource.split('\n');
-      let high007Lines: number[] = [];
-      let loggerCallLines: number[] = [];
+      const high007Lines: number[] = [];
+      const loggerCallLines: number[] = [];
       
+      // Act: Find all HIGH-007 markers and logger calls
       lines.forEach((line, index) => {
         if (line.includes('FIX HIGH-007')) {
           high007Lines.push(index);
@@ -156,10 +235,11 @@ describe('Config Logging - HIGH-007 Fix', () => {
         }
       });
       
-      // Each logger call should have a HIGH-007 marker within 5 lines before it
+      // Assert: Each logger call should have a marker within specified lines before it
       loggerCallLines.forEach(loggerLine => {
         const hasMarkerBefore = high007Lines.some(markerLine => 
-          loggerLine - markerLine > 0 && loggerLine - markerLine <= 5
+          loggerLine - markerLine > 0 && 
+          loggerLine - markerLine <= MAX_LINES_BETWEEN_MARKER_AND_CALL
         );
         expect(hasMarkerBefore).toBe(true);
       });
@@ -168,118 +248,136 @@ describe('Config Logging - HIGH-007 Fix', () => {
 
   describe('📊 Logging best practices', () => {
     it('should use descriptive log messages', () => {
-      // Log messages should be descriptive
-      expect(configSource).toMatch(/\[SECURITY WARNING\]/);
-      expect(configSource).toMatch(/Configuration validation failed/);
+      assertHasMatches(/\[SECURITY WARNING\]/, 'Security warning markers not found');
+      assertHasMatches(/Configuration validation failed/, 'Configuration validation message not found');
     });
 
     it('should include metadata objects in all logger calls', () => {
-      // Find all logger.error and logger.warn calls
+      // Arrange: Pattern to find logger calls
       const loggerCallPattern = /logger\.(error|warn)\([^)]+\)/gs;
-      const loggerCalls = configSource.match(loggerCallPattern);
+      const loggerCalls = assertHasMatches(
+        loggerCallPattern,
+        'Logger calls not found',
+        MIN_LOGGER_CALLS
+      );
       
-      expect(loggerCalls).not.toBeNull();
-      expect(loggerCalls!.length).toBeGreaterThanOrEqual(3);
-      
-      // Each should have metadata (contains a comma and object literal)
-      loggerCalls!.forEach(call => {
+      // Assert: Each call should have metadata (comma and object literal)
+      loggerCalls.forEach(call => {
         expect(call).toMatch(/,/);  // Has second parameter
         expect(call).toMatch(/\{/); // Has object literal
       });
     });
 
     it('should use consistent log level markers', () => {
-      // Security warnings should use logger.warn
-      const securityWarnings = configSource.match(/\[SECURITY WARNING\]/g);
-      expect(securityWarnings).not.toBeNull();
-      expect(securityWarnings!.length).toBeGreaterThanOrEqual(2);
+      // Assert: Security warnings use logger.warn
+      const securityWarnings = assertHasMatches(
+        /\[SECURITY WARNING\]/g,
+        'Security warnings not found',
+        MIN_SECURITY_WARNINGS
+      );
+      expect(securityWarnings.length).toBeGreaterThanOrEqual(MIN_SECURITY_WARNINGS);
       
-      // Configuration errors should use logger.error
-      expect(configSource).toMatch(/logger\.error.*Configuration validation failed/);
+      // Assert: Configuration errors use logger.error
+      assertHasMatches(/logger\.error.*Configuration validation failed/, 'Configuration error logging not found');
     });
 
     it('should include source field in security warnings', () => {
-      // Security warnings should identify the source
       const sourcePattern = /logger\.warn\([^)]*source:/g;
-      const matches = configSource.match(sourcePattern);
-      
-      expect(matches).not.toBeNull();
-      expect(matches!.length).toBeGreaterThanOrEqual(1);
+      assertHasMatches(sourcePattern, 'Source field in security warnings not found');
     });
 
     it('should include error details in error logs', () => {
-      // Error logs should include error message and stack
-      expect(configSource).toMatch(/error:\s*error\s+instanceof\s+Error/);
-      expect(configSource).toMatch(/stack:\s*error\s+instanceof\s+Error/);
+      assertHasMatches(/error:\s*error\s+instanceof\s+Error/, 'Error message extraction not found');
+      assertHasMatches(/stack:\s*error\s+instanceof\s+Error/, 'Error stack extraction not found');
     });
   });
 
   describe('🔍 Code quality', () => {
     it('should NOT have any console.* calls in the entire file', () => {
-      // Remove comments first
-      const sourceWithoutComments = configSource
-        .replace(/\/\/.*$/gm, '')  // Remove single-line comments
-        .replace(/\/\*[\s\S]*?\*\//g, '');  // Remove multi-line comments
+      // Arrange: Remove comments for accurate detection
+      const sourceWithoutComments = removeComments(configSource);
       
-      // Check for any console.* calls
+      // Act: Check for any console.* calls
       const consolePattern = /\bconsole\.(log|error|warn|info|debug)\(/g;
-      const matches = sourceWithoutComments.match(consolePattern);
       
+      // Assert: No console calls should exist
+      const matches = sourceWithoutComments.match(consolePattern);
       if (matches) {
-        fail(`Found ${matches.length} console.* call(s) in code: ${matches.join(', ')}`);
+        fail(`Console.* calls found in code (excluding comments): ${matches.length} occurrence(s)\n  - ${matches.join('\n  - ')}`);
       }
       expect(matches).toBeNull();
     });
 
     it('should have proper TypeScript types for logger', () => {
-      // Logger should be properly typed
-      expect(configSource).toMatch(/import.*getLogger/);
-      expect(configSource).toMatch(/const\s+logger/);
+      assertHasMatches(/import.*getLogger/, 'Logger import not found');
+      assertHasMatches(/const\s+logger/, 'Logger constant not found');
       
-      // Should not have 'any' type annotation for logger
-      expect(configSource).not.toMatch(/const\s+logger:\s*any/);
+      // Assert: Logger should not have 'any' type annotation
+      assertNoMatches(/const\s+logger:\s*any/, 'Logger uses "any" type (should be properly typed)');
     });
 
     it('should use proper error handling with logger', () => {
-      // Error handling should use try-catch with logger
-      expect(configSource).toMatch(/try\s*\{[\s\S]*?catch\s*\([\s\S]*?logger\.error/);
+      // Assert: try-catch blocks should use logger.error
+      assertHasMatches(
+        /try\s*\{[\s\S]*?catch\s*\([\s\S]*?logger\.error/,
+        'Error handling with logger not found'
+      );
     });
   });
 
   describe('🛡️ Security audit trail', () => {
     it('should log sensitive operations with context', () => {
-      // Security warnings should include context
-      expect(configSource).toMatch(/source:/);
-      expect(configSource).toMatch(/environment:/);
+      assertHasMatches(/source:/, 'Source context field not found');
+      assertHasMatches(/environment:/, 'Environment context field not found');
       
-      // Count context fields in security logs
+      // Arrange: Define context fields pattern
       const contextPattern = /(source|environment|format|message):/g;
-      const matches = configSource.match(contextPattern);
-      expect(matches).not.toBeNull();
-      expect(matches!.length).toBeGreaterThanOrEqual(6);
+      
+      // Assert: Verify sufficient context fields exist
+      const matches = assertHasMatches(
+        contextPattern,
+        'Insufficient context fields in logs',
+        6
+      );
+      expect(matches.length).toBeGreaterThanOrEqual(6);
     });
 
     it('should be CloudWatch compatible (structured JSON)', () => {
-      // All logger calls should have object metadata (CloudWatch Insights compatible)
-      const loggerCallsWithMetadata = configSource.match(/logger\.(error|warn)\([^)]+\{[^}]+\}/g);
+      // Arrange: Pattern for structured logging with metadata
+      const loggerCallsWithMetadata = /logger\.(error|warn)\([^)]+\{[^}]+\}/g;
       
-      expect(loggerCallsWithMetadata).not.toBeNull();
-      expect(loggerCallsWithMetadata!.length).toBeGreaterThanOrEqual(3);
+      // Assert: All logger calls should have structured metadata
+      const matches = assertHasMatches(
+        loggerCallsWithMetadata,
+        'Logger calls without structured metadata found',
+        MIN_LOGGER_CALLS
+      );
+      expect(matches.length).toBeGreaterThanOrEqual(MIN_LOGGER_CALLS);
     });
 
     it('should provide actionable information in logs', () => {
-      // Logs should have descriptive message fields
+      // Arrange: Pattern for descriptive message fields
       const messagePattern = /message:\s*['"][^'"]+['"]/g;
-      const messages = configSource.match(messagePattern);
       
-      expect(messages).not.toBeNull();
-      expect(messages!.length).toBeGreaterThanOrEqual(2);
+      // Assert: Logs should have descriptive messages
+      const messages = assertHasMatches(
+        messagePattern,
+        'Descriptive message fields not found',
+        MIN_SECURITY_WARNINGS
+      );
+      expect(messages.length).toBeGreaterThanOrEqual(MIN_SECURITY_WARNINGS);
     });
 
     it('should sanitize sensitive data in logs', () => {
-      // Should NOT log passwords or credentials directly
-      expect(configSource).not.toMatch(/logger\.(error|warn)\([^)]*password:\s*[^,}]+\)/);
-      expect(configSource).not.toMatch(/logger\.(error|warn)\([^)]*credential:\s*[^,}]+\)/);
+      // Assert: Should NOT log passwords or credentials directly
+      assertNoMatches(
+        /logger\.(error|warn)\([^)]*password:\s*[^,}]+\)/,
+        'Potential password leakage in logs detected'
+      );
+      assertNoMatches(
+        /logger\.(error|warn)\([^)]*credential:\s*[^,}]+\)/,
+        'Potential credential leakage in logs detected'
+      );
     });
   });
 });
