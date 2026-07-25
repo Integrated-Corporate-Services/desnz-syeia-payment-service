@@ -98,16 +98,7 @@ function ipMatchesCIDR(ip: string, cidrRange: CIDRRange): boolean {
     const bitsToCompare = cidrRange.prefixLength;
     let bitsCompared = 0;
 
-    for (let i = 0; i < 8 && bitsCompared < bitsToCompare; i++) {
-      const bitsInThisGroup = Math.min(16, bitsToCompare - bitsCompared);
-      const mask = (0xffff << (16 - bitsInThisGroup)) & 0xffff;
-
-      if ((ipParts[i] & mask) !== (cidrRange.baseIp[i] & mask)) {
-        return false;
-      }
-
-      bitsCompared += 16;
-    }
+      bitsCompared += bitsInThisGroup;
 
     return true;
   } else {
