@@ -105,9 +105,6 @@ export function validateSigningKeyConfiguration(
 ): SigningKeyValidationResult {
   const { govPaySigningKey, bacsSigningKey, environment } = config;
   const normalizedEnv = environment.toLowerCase();
-  const isProduction = normalizedEnv === ENVIRONMENTS.PRODUCTION || 
-                       normalizedEnv === ENVIRONMENTS.DEVELOPMENT || 
-                       normalizedEnv === ENVIRONMENTS.STAGING;
   
   const govPayExistsResult = validateKeyExists(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY');
   if (!govPayExistsResult.isValid) {
@@ -119,12 +116,12 @@ export function validateSigningKeyConfiguration(
     throw new Error(bacsExistsResult.errorMessage);
   }
   
-  const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', isProduction);
+  const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', normalizedEnv === ENVIRONMENTS.PRODUCTION);
   if (!govPayLengthResult.isValid) {
     throw new Error(govPayLengthResult.errorMessage);
   }
   
-  const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', isProduction);
+  const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', normalizedEnv === ENVIRONMENTS.PRODUCTION);
   if (!bacsLengthResult.isValid) {
     throw new Error(bacsLengthResult.errorMessage);
   }

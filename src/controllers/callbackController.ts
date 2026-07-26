@@ -3,6 +3,7 @@ import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 import getLogger from '../utils/loggerHelper';
 import { processWebhook } from '../services/paymentWebhookService';
 import { HTTP_STATUS } from '../constants/error.constants';
+import { checkDatabaseConnectivity } from '../database/db';
 
 const logger = getLogger(module);
 
@@ -244,7 +245,6 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
  * Returns 200 if all checks pass, 503 if any check fails
  */
 async function healthCheck(_req: Request, res: Response): Promise<Response> {
-  const { checkDatabaseConnectivity } = require('../database/db');
   
   const health: any = {
     status: 'healthy',
