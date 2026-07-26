@@ -162,9 +162,6 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         correlationId,
       });
 
-      // HTTP 202 Accepted: Maintains API contract consistency
-      // All successful acknowledgments return 202 (success, duplicate, errors)
-      // The 'status' field differentiates the outcome, not the HTTP code
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.DUPLICATE,
         webhookId,
