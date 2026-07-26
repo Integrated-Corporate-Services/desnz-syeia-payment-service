@@ -305,9 +305,9 @@ describe('Payment Webhook Handler - Integration Tests', () => {
     test.skip('should reject webhook with invalid signature', async () => {
       // SKIPPED: GOV.UK Pay signature validation not fully integrated yet
       
-      // GIVEN: Webhook with invalid signature
-      const webhookPayload = TestDataFactory.webhookForConfirmed();
-      const invalidSignature = SignatureGenerator.generateInvalidSignature();
+      // GIVEN: Webhook with invalid signature would be created:
+      // const webhookPayload = TestDataFactory.webhookForConfirmed();
+      // const invalidSignature = SignatureGenerator.generateInvalidSignature();
 
       // WHEN: Processing webhook with invalid signature would occur here
       // (Would call signature validation middleware)
