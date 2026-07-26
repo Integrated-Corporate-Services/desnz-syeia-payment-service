@@ -9,7 +9,6 @@
  */
 
 import { PaymentRecord, PaymentStatus } from '../fixtures/payment-states.fixture';
-import { WebhookPayload } from '../fixtures/webhook-payloads.fixture';
 
 /**
  * In-Memory Payment Repository Mock

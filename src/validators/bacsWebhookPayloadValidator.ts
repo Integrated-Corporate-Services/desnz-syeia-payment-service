@@ -13,7 +13,7 @@ export function validateBACSWebhookPayloadMiddleware(
 ): Response | void {
   const correlationId = req.headers[HEADER_CORRELATION_ID] || DEFAULT_CORRELATION_ID;
 
-  const { error, value } = bacsWebhookSchema.validate(req.body);
+  const { error } = bacsWebhookSchema.validate(req.body);
 
   if (error) {
     const validationErrors = error.details.map((detail) => ({

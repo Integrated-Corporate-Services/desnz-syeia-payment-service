@@ -9,7 +9,7 @@ import createApp from '../../../../src/app';
 
 const app = createApp();
 import db from '../../../../src/database/db';
-import { generateBACSSignature, generateTimestamp, createBACSWebhookHeaders, cleanupTestWebhooks } from '../test-helpers';
+import { generateBACSSignature, generateTimestamp, cleanupTestWebhooks } from '../test-helpers';
 import { WEBHOOK_ENDPOINT } from '../test-constants';
 
 const SIGNING_SECRET = process.env.UKSBS_WEBHOOK_SIGNING_KEY || 'dev-uksbs-key-change-in-production';

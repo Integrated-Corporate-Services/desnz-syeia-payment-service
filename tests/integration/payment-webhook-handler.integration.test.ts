@@ -22,8 +22,6 @@ import {
 import {
   createMockRequest,
   createMockResponse,
-  createMockNext,
-  TestAssertions,
 } from '../helpers/test-setup';
 import { TestDataFactory, SignatureGenerator } from '../fixtures/test-data.factory';
 import {
@@ -45,7 +43,7 @@ import {
  * Integration test scenarios
  * Defines full end-to-end test cases
  */
-const INTEGRATION_TEST_SCENARIOS = [
+// const INTEGRATION_TEST_SCENARIOS = [
   {
     name: 'New payment webhook creates payment record',
     webhookPayload: PAYMENT_SUCCEEDED_WEBHOOK,
@@ -83,7 +81,7 @@ const INTEGRATION_TEST_SCENARIOS = [
  * Invalid webhook test data
  * Tests error handling and validation
  */
-const INVALID_WEBHOOK_SCENARIOS = [
+// const INVALID_WEBHOOK_SCENARIOS = [
   {
     name: 'Missing Pay-Signature header',
     webhookPayload: PAYMENT_SUCCEEDED_WEBHOOK,
@@ -123,7 +121,7 @@ const INVALID_WEBHOOK_SCENARIOS = [
  * State transition flow test data
  * Tests complete payment lifecycle
  */
-const PAYMENT_LIFECYCLE_FLOW = [
+// const PAYMENT_LIFECYCLE_FLOW = [
   {
     step: 1,
     name: 'Payment Created',
@@ -186,14 +184,14 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       const payloadString = JSON.stringify(webhookPayload);
       const signature = SignatureGenerator.generate(payloadString);
 
-      const req = createMockRequest({
-        body: webhookPayload,
-        headers: {
-          'pay-signature': signature,
-          'content-type': 'application/json',
-        },
-      });
-      const res = createMockResponse();
+      // const req = createMockRequest({
+      //   body: webhookPayload,
+      //   headers: {
+      //     'pay-signature': signature,
+      //     'content-type': 'application/json',
+      //   },
+      // });
+      // const res = createMockResponse();
 
       // WHEN: Processing webhook
       // Simulate webhook handler flow:

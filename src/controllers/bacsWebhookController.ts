@@ -5,7 +5,7 @@ import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
-import { getValidSignatureOrGenerateId, serializeWebhookPayload } from '../utils/webhookUtils';
+import { serializeWebhookPayload } from '../utils/webhookUtils';
 import {
   HEADER_CORRELATION_ID,
   OUTCOME_SUCCESS,
@@ -15,13 +15,9 @@ import {
   OUTCOME_ERROR_INTERNAL,
 } from '../constants/bacs.constants';
 import {
-  BACSWebhookResponse,
   buildSuccessResponse,
   buildDuplicateResponse,
   buildValidationErrorResponse,
-  buildRetryableErrorResponse,
-  buildPermanentErrorResponse,
-  buildUnexpectedErrorResponse,
 } from '../utils/bacsResponseBuilder';
 
 const logger = getLogger(module);
