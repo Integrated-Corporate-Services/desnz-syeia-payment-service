@@ -168,11 +168,21 @@ describe('Signing Key Validator', () => {
     });
 
     describe('Local Environment', () => {
-      it('should accept short keys in local environment', () => {
+      it('should reject short keys in local environment', () => {
         const shortKey = 'a1b2c3d4e5f6g7h8';
+        expect(() => {
+          validateSigningKeyConfiguration({
+            govPaySigningKey: shortKey,
+            bacsSigningKey: shortKey,
+            environment: 'local',
+          });
+        }).toThrow('GOVPAY_WEBHOOK_SIGNING_KEY does not meet minimum length requirements');
+      });
+      
+      it('should accept 32 character key in local environment', () => {
         const result = validateSigningKeyConfiguration({
-          govPaySigningKey: shortKey,
-          bacsSigningKey: shortKey,
+          govPaySigningKey: VALID_32_CHAR_KEY,
+          bacsSigningKey: VALID_32_CHAR_KEY,
           environment: 'local',
         });
         expect(result.isValid).toBe(true);
