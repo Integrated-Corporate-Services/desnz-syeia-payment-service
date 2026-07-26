@@ -18,7 +18,6 @@
 import crypto from 'crypto';
 import {
   WebhookPayload,
-  PaymentResource,
   PaymentState,
   BASE_WEBHOOK_PAYLOAD,
 } from './webhook-payloads.fixture';

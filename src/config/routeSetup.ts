@@ -2,9 +2,6 @@ import { Express, Request, Response } from 'express';
 import callbackRoutes from '../routes/callback';
 import bacsWebhookRoutes from '../routes/bacsWebhook';
 import { HTTP_STATUS } from '../constants/error.constants';
-import getLogger from '../utils/loggerHelper';
-
-const logger = getLogger(module);
 
 export function registerRoutes(app: Express): void {
   app.use('/callback', callbackRoutes);

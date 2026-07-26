@@ -5,7 +5,8 @@ import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
-import { getValidSignatureOrGenerateId, serializeWebhookPayload } from '../utils/webhookUtils';
+import { serializeWebhookPayload } from '../utils/webhookUtils';
+import { sanitizeErrorMessage, createSanitizedErrorLog } from '../utils/errorSanitizer';
 import {
   HEADER_CORRELATION_ID,
   OUTCOME_SUCCESS,
@@ -15,13 +16,9 @@ import {
   OUTCOME_ERROR_INTERNAL,
 } from '../constants/bacs.constants';
 import {
-  BACSWebhookResponse,
   buildSuccessResponse,
   buildDuplicateResponse,
   buildValidationErrorResponse,
-  buildRetryableErrorResponse,
-  buildPermanentErrorResponse,
-  buildUnexpectedErrorResponse,
 } from '../utils/bacsResponseBuilder';
 
 const logger = getLogger(module);
@@ -119,11 +116,13 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
     }
 
     if (result.retryable) {
+      const sanitizedError = createSanitizedErrorLog(result.error);
       logger.warn('[BACSWebhook] Retryable error - database issue', {
         eventId,
         deliveryId,
         paymentId,
-        error: result.error,
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
         correlationId,
         outcome: OUTCOME_ERROR_DATABASE,
         error_category: ERROR_CATEGORIES.DATABASE,
@@ -137,11 +136,13 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       });
     }
 
+    const sanitizedError = createSanitizedErrorLog(result.error);
     logger.error('[BACSWebhook] Permanent error - database issue', {
       eventId,
       deliveryId,
       paymentId,
-      error: result.error,
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       correlationId,
       outcome: OUTCOME_ERROR_DATABASE,
       error_category: 'database',
@@ -154,9 +155,11 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
       errorCode: ERROR_CODES.DATABASE_ERROR,
     });
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[BACSWebhook] Unexpected error', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
+      is_database_error: sanitizedError.is_database_error,
       eventId,
       deliveryId,
       paymentId,

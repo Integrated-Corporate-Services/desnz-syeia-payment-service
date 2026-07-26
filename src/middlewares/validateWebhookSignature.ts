@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ERROR_MESSAGES, ERROR_CATEGORIES } from '../constants';
+import { UUID_V4_REGEX } from '../constants/webhook.constants';
 import { verifyHmacSignature } from '../utils/cryptoUtils';
 import getLogger from '../utils/loggerHelper';
 
@@ -40,8 +41,32 @@ export function extractWebhookHeaders(req: WebhookRequest): {
   // Official GOV.UK Pay header name is 'Pay-Signature'
   const signatureHeader = req.headers['pay-signature'];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader || null;
+  
   // webhook_message_id comes from body, not headers
   const webhookId = req.body?.webhook_message_id || null;
+  
+  // Security: Validate webhook_message_id is a valid UUID v4
+  // Prevents injection attacks and ensures data integrity
+  if (webhookId !== null) {
+    // Must be a string
+    if (typeof webhookId !== 'string') {
+      logger.warn('[Webhook] Invalid webhook_message_id type - must be string', {
+        webhook_id_type: typeof webhookId,
+        error_category: ERROR_CATEGORIES.VALIDATION,
+      });
+      return { signature, webhookId: null };
+    }
+    
+    // Must match UUID v4 format
+    if (!UUID_V4_REGEX.test(webhookId)) {
+      logger.warn('[Webhook] Invalid webhook_message_id format - not a valid UUID v4', {
+        webhook_id_received: webhookId,
+        error_category: ERROR_CATEGORIES.VALIDATION,
+      });
+      return { signature, webhookId: null };
+    }
+  }
+  
   return { signature, webhookId };
 }
 

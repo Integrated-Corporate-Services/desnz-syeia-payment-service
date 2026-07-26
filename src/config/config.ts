@@ -148,7 +148,7 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
       }
     } catch {
       throw new Error(
-        'DB_CREDENTIALS error'
+        'Invalid DB_CREDENTIALS: value must be valid JSON'
       );
     }
   }

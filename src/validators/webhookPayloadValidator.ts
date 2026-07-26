@@ -4,11 +4,8 @@
  */
 
 import {
-  WebhookPayload,
   ValidationError,
   ValidationResult,
-  PaymentResource,
-  PaymentState,
 } from '../types/webhook.types';
 import { WEBHOOK_EVENT_TYPES, GOV_UK_PAY_STATUSES } from '../constants/webhook.constants';
 import getLogger from '../utils/loggerHelper';

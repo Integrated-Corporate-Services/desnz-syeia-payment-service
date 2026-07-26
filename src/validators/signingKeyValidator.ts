@@ -44,7 +44,7 @@ function validateKeyLength(
       isValid: false,
       errorCode: ERROR_CODES.SIGNING_KEY_TOO_SHORT,
       errorMessage: 
-        `FATAL: ${keyName} does not meet minimum length requirements for production. ` +
+        `FATAL: ${keyName} does not meet minimum length requirements. ` +
         `Key must be at least ${MIN_SIGNING_KEY_LENGTH} characters. ` +
         `Generate a strong key with: openssl rand -hex 64`,
     };
@@ -105,10 +105,7 @@ export function validateSigningKeyConfiguration(
 ): SigningKeyValidationResult {
   const { govPaySigningKey, bacsSigningKey, environment } = config;
   const normalizedEnv = environment.toLowerCase();
-  const isProduction = normalizedEnv === ENVIRONMENTS.PRODUCTION || 
-                       normalizedEnv === ENVIRONMENTS.DEVELOPMENT || 
-                       normalizedEnv === ENVIRONMENTS.STAGING;
-  
+
   const govPayExistsResult = validateKeyExists(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY');
   if (!govPayExistsResult.isValid) {
     throw new Error(govPayExistsResult.errorMessage);
@@ -119,15 +116,6 @@ export function validateSigningKeyConfiguration(
     throw new Error(bacsExistsResult.errorMessage);
   }
   
-  const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', isProduction);
-  if (!govPayLengthResult.isValid) {
-    throw new Error(govPayLengthResult.errorMessage);
-  }
-  
-  const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', isProduction);
-  if (!bacsLengthResult.isValid) {
-    throw new Error(bacsLengthResult.errorMessage);
-  }
   
   const govPayStrengthResult = validateKeyStrength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY');
   if (!govPayStrengthResult.isValid) {
@@ -137,6 +125,17 @@ export function validateSigningKeyConfiguration(
   const bacsStrengthResult = validateKeyStrength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY');
   if (!bacsStrengthResult.isValid) {
     throw new Error(bacsStrengthResult.errorMessage);
+  }
+  
+
+  const govPayLengthResult = validateKeyLength(govPaySigningKey, 'GOVPAY_WEBHOOK_SIGNING_KEY', true);
+  if (!govPayLengthResult.isValid) {
+    throw new Error(govPayLengthResult.errorMessage);
+  }
+  
+  const bacsLengthResult = validateKeyLength(bacsSigningKey, 'UKSBS_WEBHOOK_SIGNING_KEY', true);
+  if (!bacsLengthResult.isValid) {
+    throw new Error(bacsLengthResult.errorMessage);
   }
   
   const allWarnings = [

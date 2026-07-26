@@ -24,9 +24,7 @@ import {
 import { TestDataFactory } from '../fixtures/test-data.factory';
 import {
   PaymentStatus,
-  PaymentRecord,
 } from '../fixtures/payment-states.fixture';
-import { sleep } from '../helpers/test-setup';
 
 // ===================================================================
 // TEST DATA
@@ -36,7 +34,7 @@ import { sleep } from '../helpers/test-setup';
  * Happy path scenarios
  * Tests successful payment flows from start to finish
  */
-const HAPPY_PATH_SCENARIOS = [
+/* const HAPPY_PATH_SCENARIOS = [
   {
     name: 'Complete successful payment flow',
     steps: [
@@ -79,13 +77,13 @@ const HAPPY_PATH_SCENARIOS = [
     finalStatus: PaymentStatus.CONFIRMED,
     finalEventCount: 2,
   },
-];
+]; */
 
 /**
  * Failure scenarios
  * Tests payment flows that end in failure or cancellation
  */
-const FAILURE_SCENARIOS = [
+/* const FAILURE_SCENARIOS = [
   {
     name: 'Payment fails after creation',
     steps: [
@@ -120,12 +118,12 @@ const FAILURE_SCENARIOS = [
     finalStatus: PaymentStatus.CANCELLED,
     isTerminal: true,
   },
-];
+]; */
 
 /**
  * Complex scenarios with duplicates and retries
  */
-const COMPLEX_SCENARIOS = [
+/* const COMPLEX_SCENARIOS = [
   {
     name: 'Multiple duplicate webhooks at different stages',
     webhooks: [
@@ -146,7 +144,7 @@ const COMPLEX_SCENARIOS = [
     ],
     expectedProcessedCount: 1, // Second attempt detected as duplicate
   },
-];
+]; */
 
 // ===================================================================
 // TEST SCENARIOS

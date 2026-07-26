@@ -1,7 +1,7 @@
 // ECS Metadata Helper
 // Captures AWS ECS task and container metadata for CloudWatch correlation
 
-import https from 'https';
+import http from 'http';
 
 interface ECSMetadata {
   ecs_task_id?: string;
@@ -72,7 +72,7 @@ export async function getECSMetadata(): Promise<ECSMetadata> {
  */
 function fetchMetadataFromEndpoint(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 1000 }, (res) => {
+    const request = http.get(url, { timeout: 1000 }, (res) => {
       let data = '';
       
       res.on('data', (chunk) => {
