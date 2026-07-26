@@ -43,7 +43,7 @@ import {
  * Integration test scenarios
  * Defines full end-to-end test cases
  */
-// const INTEGRATION_TEST_SCENARIOS = [
+/* const INTEGRATION_TEST_SCENARIOS = [
   {
     name: 'New payment webhook creates payment record',
     webhookPayload: PAYMENT_SUCCEEDED_WEBHOOK,
@@ -75,13 +75,13 @@ import {
     expectedHttpStatus: 202,
     description: 'Failed webhook creates payment with FAILED status',
   },
-];
+]; */
 
 /**
  * Invalid webhook test data
  * Tests error handling and validation
  */
-// const INVALID_WEBHOOK_SCENARIOS = [
+/* const INVALID_WEBHOOK_SCENARIOS = [
   {
     name: 'Missing Pay-Signature header',
     webhookPayload: PAYMENT_SUCCEEDED_WEBHOOK,
@@ -115,13 +115,13 @@ import {
     expectedHttpStatus: 400,
     expectedError: 'Invalid payload',
   },
-];
+]; */
 
 /**
  * State transition flow test data
  * Tests complete payment lifecycle
  */
-// const PAYMENT_LIFECYCLE_FLOW = [
+/* const PAYMENT_LIFECYCLE_FLOW = [
   {
     step: 1,
     name: 'Payment Created',
@@ -140,7 +140,7 @@ import {
     webhookPayload: PAYMENT_CAPTURED_WEBHOOK,
     expectedStatus: PaymentStatus.CAPTURED,
   },
-];
+]; */
 
 // ===================================================================
 // TEST SCENARIOS

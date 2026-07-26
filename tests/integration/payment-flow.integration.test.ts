@@ -34,7 +34,7 @@ import {
  * Happy path scenarios
  * Tests successful payment flows from start to finish
  */
-// const HAPPY_PATH_SCENARIOS = [
+/* const HAPPY_PATH_SCENARIOS = [
   {
     name: 'Complete successful payment flow',
     steps: [
@@ -77,13 +77,13 @@ import {
     finalStatus: PaymentStatus.CONFIRMED,
     finalEventCount: 2,
   },
-];
+]; */
 
 /**
  * Failure scenarios
  * Tests payment flows that end in failure or cancellation
  */
-// const FAILURE_SCENARIOS = [
+/* const FAILURE_SCENARIOS = [
   {
     name: 'Payment fails after creation',
     steps: [
@@ -118,12 +118,12 @@ import {
     finalStatus: PaymentStatus.CANCELLED,
     isTerminal: true,
   },
-];
+]; */
 
 /**
  * Complex scenarios with duplicates and retries
  */
-// const COMPLEX_SCENARIOS = [
+/* const COMPLEX_SCENARIOS = [
   {
     name: 'Multiple duplicate webhooks at different stages',
     webhooks: [
@@ -144,7 +144,7 @@ import {
     ],
     expectedProcessedCount: 1, // Second attempt detected as duplicate
   },
-];
+]; */
 
 // ===================================================================
 // TEST SCENARIOS
