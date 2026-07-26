@@ -14,7 +14,6 @@ import {
   PaymentStatus,
   TERMINAL_STATES,
   isTerminalState,
-  isValidTransition,
   PAYMENT_STATE_REFUNDED,
   PAYMENT_STATE_FAILED,
   PAYMENT_STATE_CANCELLED,
@@ -462,11 +461,7 @@ describe('Terminal State Protection', () => {
       const initialEventCount = payment.event_count;
 
       // WHEN: Multiple duplicate failed events arrive
-      // (Simulated - 3 duplicate events)
-      const duplicateWebhook1 = TestDataFactory.webhookForFailed(payment.govuk_pay_id);
-      const duplicateWebhook2 = TestDataFactory.webhookForFailed(payment.govuk_pay_id);
-      const duplicateWebhook3 = TestDataFactory.webhookForFailed(payment.govuk_pay_id);
-
+      // (Simulated - 3 duplicate events would be created)
       // All would be detected as duplicates and skipped
 
       // THEN: Event count remains unchanged

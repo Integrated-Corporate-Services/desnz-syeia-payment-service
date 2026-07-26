@@ -41,8 +41,6 @@ interface WebhookResponse {
   paymentId?: string;
   message?: string;
   isDuplicate?: boolean;
-  error?: string;
-  receivedAt?: string;
   [key: string]: unknown;
 }
 
@@ -191,7 +189,6 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       } as WebhookResponse);
     }
 
-    // Retryable error (e.g., SQS temporarily unavailable)
     if (result.retryable) {
       logger.warn('Webhook processing encountered retryable error', {
         webhookId,
@@ -204,8 +201,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
         status: WEBHOOK_STATUS.RETRYABLE_ERROR,
         webhookId,
         paymentId,
-        error: result.error,
-        message: 'Webhook processing scheduled for retry',
+        message: 'Webhook accepted but processing failed temporarily',
       } as WebhookResponse);
     }
 
@@ -221,8 +217,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       status: WEBHOOK_STATUS.PERMANENT_ERROR,
       webhookId,
       paymentId,
-      error: result.error,
-      message: 'Webhook moved to dead-letter queue',
+      message: 'Webhook accepted but cannot be processed',
     } as WebhookResponse);
     
   } catch (error) {
@@ -238,8 +233,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
       status: WEBHOOK_STATUS.ERROR,
       webhookId,
       paymentId,
-      error: 'Unexpected error processing webhook',
-      message: 'Webhook will be retried',
+      message: 'Webhook accepted but processing encountered an error',
     } as WebhookResponse);
   }
 }

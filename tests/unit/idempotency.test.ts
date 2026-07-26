@@ -31,85 +31,11 @@ import {
 // TEST DATA
 // ===================================================================
 
-/**
- * Duplicate webhook scenarios
- * Defines test cases for duplicate webhook handling
- */
-const DUPLICATE_WEBHOOK_SCENARIOS = [
-  {
-    name: 'First webhook arrival',
-    webhookId: 'evt_test_first_001',
-    isFirstTime: true,
-    expectedProcessing: true,
-    description: 'First webhook should be processed',
-  },
-  {
-    name: 'Duplicate webhook arrival',
-    webhookId: 'evt_test_first_001', // Same as above
-    isFirstTime: false,
-    expectedProcessing: false,
-    description: 'Duplicate webhook should be skipped',
-  },
-  {
-    name: 'Different webhook arrival',
-    webhookId: 'evt_test_second_002',
-    isFirstTime: true,
-    expectedProcessing: true,
-    description: 'Different webhook should be processed',
-  },
-];
+// Duplicate webhook scenarios removed - inline test cases are clearer
 
-/**
- * Duplicate event scenarios (same event type, already processed)
- * Tests idempotent behavior when same event arrives multiple times
- */
-const DUPLICATE_EVENT_SCENARIOS = [
-  {
-    name: 'Duplicate CONFIRMED event',
-    existingState: PAYMENT_STATE_CONFIRMED,
-    duplicateEventType: 'card_payment_succeeded',
-    expectedStateChange: false,
-    expectedEventCount: PAYMENT_STATE_CONFIRMED.event_count, // No increment
-    description: 'Should not change state or increment event count',
-  },
-  {
-    name: 'Duplicate CAPTURED event',
-    existingState: PAYMENT_STATE_CAPTURED,
-    duplicateEventType: 'card_payment_captured',
-    expectedStateChange: false,
-    expectedEventCount: PAYMENT_STATE_CAPTURED.event_count, // No increment
-    description: 'Should not change state or increment event count',
-  },
-  {
-    name: 'Duplicate REFUNDED event on terminal state',
-    existingState: PAYMENT_STATE_REFUNDED,
-    duplicateEventType: 'refund_succeeded',
-    expectedStateChange: false,
-    expectedEventCount: PAYMENT_STATE_REFUNDED.event_count, // No increment
-    description: 'Terminal state should remain unchanged',
-  },
-];
+// Duplicate event scenarios removed - inline test cases are clearer
 
-/**
- * Race condition scenarios
- * Tests handling of simultaneous duplicate webhooks
- */
-const RACE_CONDITION_SCENARIOS = [
-  {
-    name: 'Two identical webhooks arrive simultaneously',
-    webhookId: 'evt_test_race_001',
-    simultaneousRequests: 2,
-    expectedProcessedCount: 1,
-    description: 'Only one should be processed, one should be detected as duplicate',
-  },
-  {
-    name: 'Three identical webhooks arrive simultaneously',
-    webhookId: 'evt_test_race_002',
-    simultaneousRequests: 3,
-    expectedProcessedCount: 1,
-    description: 'Only one should be processed, others detected as duplicates',
-  },
-];
+// Race condition scenarios removed - inline test cases are clearer
 
 // ===================================================================
 // TEST SCENARIOS
@@ -226,11 +152,7 @@ describe('Idempotency Handling', () => {
       const existingPayment = PAYMENT_STATE_CONFIRMED;
       await paymentRepository.create(existingPayment);
 
-      // WHEN: Duplicate confirmed event arrives
-      const duplicateWebhook = TestDataFactory.webhookForConfirmed(
-        existingPayment.govuk_pay_id
-      );
-
+      // WHEN: Duplicate confirmed event arrives (simulated)
       // Simulate idempotent check: payment exists and state matches
       const payment = await paymentRepository.findByGovukPayId(
         existingPayment.govuk_pay_id
@@ -253,11 +175,7 @@ describe('Idempotency Handling', () => {
 
       const initialEventCount = existingPayment.event_count;
 
-      // WHEN: Duplicate captured event arrives
-      const duplicateWebhook = TestDataFactory.webhookForCaptured(
-        existingPayment.govuk_pay_id
-      );
-
+      // WHEN: Duplicate captured event arrives (simulated)
       // Simulate idempotent check
       const payment = await paymentRepository.findByGovukPayId(
         existingPayment.govuk_pay_id
@@ -278,13 +196,7 @@ describe('Idempotency Handling', () => {
       const existingPayment = PAYMENT_STATE_REFUNDED;
       await paymentRepository.create(existingPayment);
 
-      // WHEN: Duplicate refunded event arrives
-      const duplicateWebhook = {
-        webhook_message_id: 'evt_test_refund_duplicate',
-        event_type: 'refund_succeeded',
-        resource_id: existingPayment.govuk_pay_id,
-      };
-
+      // WHEN: Duplicate refunded event arrives (simulated)
       // Simulate idempotent check
       const payment = await paymentRepository.findByGovukPayId(
         existingPayment.govuk_pay_id

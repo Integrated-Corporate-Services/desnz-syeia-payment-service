@@ -27,7 +27,7 @@ export async function getECSMetadata(): Promise<ECSMetadata> {
   }
 
   // If we already tried and failed, return empty object
-  if (metadataFetchAttempted && !cachedMetadata) {
+  if (metadataFetchAttempted) {
     return {};
   }
 

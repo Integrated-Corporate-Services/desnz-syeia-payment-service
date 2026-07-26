@@ -5,7 +5,7 @@ import { validateSigningKeyConfiguration } from '../validators/signingKeyValidat
 dotenv.config();
 
 const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
-const isProduction = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+const isProduction = ['prod', 'production'].includes((process.env.NODE_ENV || '').toLowerCase());
 
 if (isLocal) {
   const envFile = `.env.${process.env.NODE_ENV || 'local'}`;
@@ -86,9 +86,8 @@ async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2
   }
 }
 
-function isProductionLikeEnvironment(nodeEnv: string): boolean {
-  const prodLikeEnvironments = ['production', 'staging', 'development'];
-  return prodLikeEnvironments.includes(nodeEnv.toLowerCase());
+function isProductionEnvironment(nodeEnv: string): boolean {
+  return ['prod', 'production'].includes(nodeEnv.toLowerCase());
 }
 
 function isSecretsManagerArn(value: string): boolean {
@@ -99,24 +98,29 @@ function validateProductionCredentialRequirements(
   dbCredentials: string | undefined,
   nodeEnv: string
 ): void {
-  const isProdLike = isProductionLikeEnvironment(nodeEnv);
+  const isProduction = isProductionEnvironment(nodeEnv);
   
-  if (!isProdLike) {
-    return;
+  if (isProduction) {
+    if (!dbCredentials) {
+      throw new Error(
+        'FATAL: DB_CREDENTIALS environment variable is required in production. ' +
+        'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
+      );
+    }
+    
+    if (!isSecretsManagerArn(dbCredentials)) {
+      throw new Error(
+        'FATAL: In production, DB_CREDENTIALS must be AWS Secrets Manager ARN. ' +
+        'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
+        'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+      );
+    }
   }
   
-  if (!dbCredentials) {
-    throw new Error(
-      `FATAL: DB_CREDENTIALS environment variable is required in ${nodeEnv} environment. ` +
-      'Configure AWS Secrets Manager ARN for PCI DSS compliance.'
-    );
-  }
-  
-  if (!isSecretsManagerArn(dbCredentials)) {
-    throw new Error(
-      `FATAL: In ${nodeEnv} environment, DB_CREDENTIALS must be AWS Secrets Manager ARN. ` +
-      'Plaintext credentials forbidden for PCI DSS 8.3 compliance. ' +
-      'Expected format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME'
+  if (!isProduction && dbCredentials && !isSecretsManagerArn(dbCredentials)) {
+    console.warn(
+      `[SECURITY WARNING] ${nodeEnv} environment using plaintext DB credentials. ` +
+      'Consider using AWS Secrets Manager ARN for enhanced security.'
     );
   }
 }

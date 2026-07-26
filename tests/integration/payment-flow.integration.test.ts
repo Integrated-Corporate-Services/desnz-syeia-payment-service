@@ -287,7 +287,6 @@ describe('End-to-End Payment Flow - Integration Tests', () => {
         event_count: 1,
       });
 
-      const confirmedWebhook = TestDataFactory.webhookForConfirmed(paymentId);
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.CONFIRMED,
         event_count: 2,
@@ -322,7 +321,6 @@ describe('End-to-End Payment Flow - Integration Tests', () => {
       });
 
       // WHEN: Payment fails
-      const failedWebhook = TestDataFactory.webhookForFailed(paymentId);
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.FAILED,
         event_count: 2,
@@ -363,7 +361,6 @@ describe('End-to-End Payment Flow - Integration Tests', () => {
       });
 
       // WHEN: Payment cancelled
-      const cancelledWebhook = TestDataFactory.webhookForCancelled(paymentId);
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.CANCELLED,
         event_count: 2,
@@ -406,10 +403,7 @@ describe('End-to-End Payment Flow - Integration Tests', () => {
         event_count: 1,
       });
       await idempotencyService.markAsProcessed(created1.webhook_message_id);
-
-      const created2 = { ...created1, webhook_message_id: created1.webhook_message_id + '_dup' };
-      const isDuplicateCreated = await idempotencyService.hasBeenProcessed(created1.webhook_message_id);
-      // Would be skipped in real flow
+      // Duplicate created webhooks would be skipped in real flow
 
       // Confirm + Duplicate Confirmed
       const confirmed1 = TestDataFactory.webhookForConfirmed(paymentId);
@@ -418,9 +412,7 @@ describe('End-to-End Payment Flow - Integration Tests', () => {
         event_count: 2,
       });
       await idempotencyService.markAsProcessed(confirmed1.webhook_message_id);
-
-      const confirmed2 = { ...confirmed1, webhook_message_id: confirmed1.webhook_message_id + '_dup' };
-      // Would be skipped
+      // Duplicate confirmed webhooks would be skipped
 
       // Capture + Duplicate Captured
       const captured1 = TestDataFactory.webhookForCaptured(paymentId);
