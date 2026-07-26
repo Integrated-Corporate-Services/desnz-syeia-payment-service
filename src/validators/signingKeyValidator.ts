@@ -1,4 +1,4 @@
-import { ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
+import { ERROR_CODES } from '../constants/error.constants';
 import { CRYPTO_CONFIG, ENVIRONMENTS } from '../constants/config.constants';
 
 export interface SigningKeyValidationResult {

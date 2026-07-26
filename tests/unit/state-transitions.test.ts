@@ -16,14 +16,7 @@ import {
   TERMINAL_STATES,
   isValidTransition,
   isTerminalState,
-  INVALID_TRANSITION_SCENARIOS,
-  PAYMENT_STATE_CREATED,
-  PAYMENT_STATE_CONFIRMED,
-  PAYMENT_STATE_CAPTURED,
-  PAYMENT_STATE_REFUNDED,
-  PAYMENT_STATE_FAILED,
 } from '../fixtures/payment-states.fixture';
-import { TestDataFactory } from '../fixtures/test-data.factory';
 
 // ===================================================================
 // TEST DATA

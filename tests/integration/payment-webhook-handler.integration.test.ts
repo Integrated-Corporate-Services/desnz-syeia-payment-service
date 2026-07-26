@@ -194,7 +194,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
         },
       });
       const res = createMockResponse();
-      const next = createMockNext();
 
       // WHEN: Processing webhook
       // Simulate webhook handler flow:
@@ -310,15 +309,7 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       const webhookPayload = TestDataFactory.webhookForConfirmed();
       const invalidSignature = SignatureGenerator.generateInvalidSignature();
 
-      const req = createMockRequest({
-        body: webhookPayload,
-        headers: {
-          'pay-signature': invalidSignature,
-        },
-      });
-      const res = createMockResponse();
-
-      // WHEN: Processing webhook with invalid signature
+      // WHEN: Processing webhook with invalid signature would occur here
       // (Would call signature validation middleware)
 
       // THEN: Should return 401
@@ -389,7 +380,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       expect(payment?.status).toBe(PaymentStatus.CREATED);
 
       // Step 2: Payment Confirmed
-      const confirmedWebhook = TestDataFactory.webhookForConfirmed(paymentId);
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.CONFIRMED,
         event_count: 2,
@@ -400,7 +390,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       expect(payment?.status).toBe(PaymentStatus.CONFIRMED);
 
       // Step 3: Payment Captured
-      const capturedWebhook = TestDataFactory.webhookForCaptured(paymentId);
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.CAPTURED,
         event_count: 3,
@@ -435,8 +424,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       });
 
       // WHEN: CAPTURED event arrives before CONFIRMED
-      const capturedWebhook = TestDataFactory.webhookForCaptured(paymentId);
-
       // Validate transition
       const validation = await stateTransitionService.validateTransition(
         PaymentStatus.CREATED,
