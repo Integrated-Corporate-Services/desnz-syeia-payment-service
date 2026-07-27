@@ -24,6 +24,8 @@ import {
   PaymentStatus,
   PaymentRecord,
 } from '../fixtures/payment-states.fixture';
+
+
 // ===================================================================
 // TEST DATA
 // ===================================================================
@@ -170,8 +172,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
     test('should process new payment webhook successfully', async () => {
       // GIVEN: Valid webhook payload
       const webhookPayload = TestDataFactory.webhookForConfirmed();
-      const payloadString = JSON.stringify(webhookPayload);
-      const signature = SignatureGenerator.generate(payloadString);
 
       // const req = createMockRequest({
       //   body: webhookPayload,
