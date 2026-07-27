@@ -182,7 +182,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
       // GIVEN: Valid webhook payload
       const webhookPayload = TestDataFactory.webhookForConfirmed();
       const payloadString = JSON.stringify(webhookPayload);
-      const signature = SignatureGenerator.generate(payloadString);
 
       // const req = createMockRequest({
       //   body: webhookPayload,
