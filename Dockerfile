@@ -29,7 +29,6 @@ COPY --from=builder /app/dist ./dist
 
 # Run as non-root user for security
 USER node
-
 EXPOSE 3001
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
