@@ -6,7 +6,7 @@ import { checkDatabaseConnectivity } from '../database/db';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 import { serializeWebhookPayload } from '../utils/webhookUtils';
-import { sanitizeErrorMessage, createSanitizedErrorLog } from '../utils/errorSanitizer';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 import {
   HEADER_CORRELATION_ID,
   OUTCOME_SUCCESS,
