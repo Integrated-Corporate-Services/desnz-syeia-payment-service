@@ -28,12 +28,7 @@ import {
   PaymentStatus,
   PaymentRecord,
 } from '../fixtures/payment-states.fixture';
-import {
-  PAYMENT_CREATED_WEBHOOK,
-  PAYMENT_SUCCEEDED_WEBHOOK,
-  PAYMENT_CAPTURED_WEBHOOK,
-  PAYMENT_FAILED_WEBHOOK,
-} from '../fixtures/webhook-payloads.fixture';
+
 
 // ===================================================================
 // TEST DATA
