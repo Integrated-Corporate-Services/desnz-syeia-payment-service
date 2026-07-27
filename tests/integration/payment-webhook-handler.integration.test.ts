@@ -19,7 +19,7 @@ import {
   MockEventPublisher,
   MockBuilderFactory,
 } from '../helpers/mock-builders';
-import { TestDataFactory, SignatureGenerator } from '../fixtures/test-data.factory';
+import { TestDataFactory } from '../fixtures/test-data.factory';
 import {
   PaymentStatus,
   PaymentRecord,
