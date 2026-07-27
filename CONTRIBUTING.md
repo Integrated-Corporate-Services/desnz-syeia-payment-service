@@ -4,7 +4,7 @@ Thank you for contributing to the Payment Webhook Service.
 
 ## Reporting bugs
 
-[Open an issue](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/issues/new) with:
+[Open an issue](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/) with:
 - **Environment:** Node.js version, deployment environment (ECS/local)
 - **Steps to reproduce:** Numbered list of actions
 - **Expected vs actual behavior**
@@ -227,8 +227,8 @@ describe('POST /webhooks/govuk-pay/callback', () => {
 
 ## Questions?
 
-- **Technical questions:** [GitHub Discussions](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/discussions)
-- **Bug reports:** [GitHub Issues](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/issues)
+- **Technical questions:** [GitHub Discussions](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/)
+- **Bug reports:** [GitHub Issues](https://github.com/Integrated-Corporate-Services/desnz-syeia-payment-service/)
 - **Security concerns:** [SECURITY.md](SECURITY.md)
 
 ## License
