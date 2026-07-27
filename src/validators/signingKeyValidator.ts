@@ -1,5 +1,5 @@
 import { ERROR_CODES } from '../constants/error.constants';
-import { CRYPTO_CONFIG, ENVIRONMENTS } from '../constants/config.constants';
+import { CRYPTO_CONFIG } from '../constants/config.constants';
 
 export interface SigningKeyValidationResult {
   isValid: boolean;
