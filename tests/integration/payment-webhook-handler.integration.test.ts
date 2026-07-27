@@ -19,10 +19,6 @@ import {
   MockEventPublisher,
   MockBuilderFactory,
 } from '../helpers/mock-builders';
-  PAYMENT_CAPTURED_WEBHOOK,
-  PAYMENT_FAILED_WEBHOOK,
-} from '../fixtures/webhook-payloads.fixture';
-
 // ===================================================================
 // TEST DATA
 // ===================================================================
