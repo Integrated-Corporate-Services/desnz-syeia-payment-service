@@ -181,7 +181,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
     test('should process new payment webhook successfully', async () => {
       // GIVEN: Valid webhook payload
       const webhookPayload = TestDataFactory.webhookForConfirmed();
-      const payloadString = JSON.stringify(webhookPayload);
 
       // const req = createMockRequest({
       //   body: webhookPayload,
