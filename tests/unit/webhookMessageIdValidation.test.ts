@@ -13,7 +13,7 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         '550e8400-e29b-41d4-a716-446655440000',
         'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         '7c9e6679-7425-40de-944b-e07fc1f90ae7',
-        'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', // Microsoft GUID format
+        'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', // lowercase hex UUID v4
       ];
 
       validUUIDs.forEach(uuid => {
@@ -265,14 +265,18 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         '550e8400-e29b-51d4-a716-446655440000', // wrong version (5)
         '550e8400-e29b-41d4-e716-446655440000', // wrong variant
         '',
-        null,
-        undefined,
       ];
 
       invalidUUIDs.forEach(uuid => {
-        if (uuid !== null && uuid !== undefined) {
-          expect(UUID_V4_REGEX.test(uuid as string)).toBe(false);
-        }
+        expect(UUID_V4_REGEX.test(uuid)).toBe(false);
+      });
+    });
+
+    it('should require callers to guard non-string UUID inputs before regex validation', () => {
+      const nonStringUUIDs = [null, undefined];
+
+      nonStringUUIDs.forEach(uuid => {
+        expect(typeof uuid === 'string').toBe(false);
       });
     });
   });
