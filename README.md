@@ -49,15 +49,6 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=appdb
 
-# GOV.UK Pay
-GOVPAY_API_URL=https://publicapi.payments.service.gov.uk/v1/payments
-GOVPAY_WEBHOOK_SIGNING_KEY=your_key_here
-
-# UKSBS BACS
-BACS_WEBHOOK_SIGNING_KEY=your_key_here
-```
-
-See `.env.example` for full configuration options.
 
 ## API Endpoints
 
@@ -118,33 +109,10 @@ npm run test:watch        # Watch mode
 
 - ✅ HMAC-SHA256 webhook signature validation
 - ✅ AWS Secrets Manager integration
-- ✅ Rate limiting (100 req/min per IP)
-- ✅ Request timeout enforcement (30s)
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ Log sanitization (secrets redacted)
+- ✅ Rate limiting
 - ✅ Helmet.js security headers
 - ✅ CORS configuration
-- ✅ Idempotency with deduplication
-
-## Deployment
-
-### AWS ECS
-
-```yaml
-TaskDefinition:
-  ContainerDefinitions:
-    - Name: payment-webhook-service
-      Image: your-ecr-repo/payment-service:latest
-      Environment:
-        - Name: NODE_ENV
-          Value: production
-      Secrets:
-        - Name: DB_PASSWORD
-          ValueFrom: arn:aws:secretsmanager:...
-        - Name: GOVPAY_WEBHOOK_SIGNING_KEY
-          ValueFrom: arn:aws:secretsmanager:...
-```
-
+- 
 ### Docker
 
 ```bash
@@ -194,7 +162,6 @@ This service adheres to:
 ## Related Documentation
 
 - [GOV.UK Pay Webhook Documentation](https://docs.payments.service.gov.uk/webhooks/)
-- [UKSBS Integration Guide](docs/UKSBS-INTEGRATION.md) (internal)
 
 ## Contributing
 
