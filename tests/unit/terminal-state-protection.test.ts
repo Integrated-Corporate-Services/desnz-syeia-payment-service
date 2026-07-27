@@ -61,7 +61,7 @@ const TERMINAL_STATE_CHANGE_ATTEMPTS = [
   {
     terminalState: PaymentStatus.REFUNDED,
     attemptedState: PaymentStatus.SETTLED,
-    reason: 'Cannot unsettled a refunded payment',
+    reason: 'Cannot unsettle a refunded payment',
   },
   {
     terminalState: PaymentStatus.REFUNDED,
