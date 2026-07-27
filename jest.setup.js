@@ -13,6 +13,7 @@ process.env.PGSSLMODE = 'disable';
 // codeql[js/hardcoded-credentials] - Intentional test credentials
 process.env.GOVPAY_WEBHOOK_SIGNING_KEY = 'test-govpay-signing-key-for-tests-12345678';  // ✅ Used in GovPay webhook validation
 process.env.GOVPAY_API_KEY = 'test-govpay-api-key-not-real-value';                      // ✅ Used in GovPay API service
+process.env.GOVPAY_API_URL = 'https://publicapi.payments.service.gov.uk';               // ✅ GOV.UK Pay API URL
 process.env.UKSBS_WEBHOOK_SIGNING_KEY = 'test-uksbs-signing-key-for-tests-12345678';    // ✅ Used in BACS webhook tests (47 tests)
 process.env.BACKEND_SERVICE_URL = 'http://localhost:3000';
 process.env.LOG_LEVEL = 'error'; // Reduce log noise during tests

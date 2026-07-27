@@ -36,7 +36,7 @@ describe('extractWebhookHeaders', () => {
         'pay-signature': 'test-signature-123',
       },
       body: {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
       },
     };
 
@@ -44,7 +44,7 @@ describe('extractWebhookHeaders', () => {
 
     expect(result).toEqual({
       signature: 'test-signature-123',
-      webhookId: 'evt_test_12345',
+      webhookId: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
     });
   });
 
@@ -54,7 +54,7 @@ describe('extractWebhookHeaders', () => {
         'pay-signature': ['first-signature', 'second-signature'],
       },
       body: {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
       },
     };
 
@@ -62,7 +62,7 @@ describe('extractWebhookHeaders', () => {
 
     expect(result).toEqual({
       signature: 'first-signature',
-      webhookId: 'evt_test_12345',
+      webhookId: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
     });
   });
 
@@ -102,7 +102,7 @@ describe('extractWebhookHeaders', () => {
         'content-type': 'application/json',
       },
       body: {
-        webhook_message_id: 'evt_test_12345',
+        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
       },
     };
 
@@ -110,7 +110,7 @@ describe('extractWebhookHeaders', () => {
 
     expect(result).toEqual({
       signature: null,
-      webhookId: 'evt_test_12345',
+      webhookId: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
     });
   });
 });

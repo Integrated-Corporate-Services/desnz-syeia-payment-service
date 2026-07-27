@@ -19,21 +19,12 @@ import {
   MockEventPublisher,
   MockBuilderFactory,
 } from '../helpers/mock-builders';
-import {
-  createMockRequest,
-  createMockResponse,
-} from '../helpers/test-setup';
-import { TestDataFactory, SignatureGenerator } from '../fixtures/test-data.factory';
+import { TestDataFactory } from '../fixtures/test-data.factory';
 import {
   PaymentStatus,
   PaymentRecord,
 } from '../fixtures/payment-states.fixture';
-import {
-  PAYMENT_CREATED_WEBHOOK,
-  PAYMENT_SUCCEEDED_WEBHOOK,
-  PAYMENT_CAPTURED_WEBHOOK,
-  PAYMENT_FAILED_WEBHOOK,
-} from '../fixtures/webhook-payloads.fixture';
+
 
 // ===================================================================
 // TEST DATA
@@ -181,8 +172,6 @@ describe('Payment Webhook Handler - Integration Tests', () => {
     test('should process new payment webhook successfully', async () => {
       // GIVEN: Valid webhook payload
       const webhookPayload = TestDataFactory.webhookForConfirmed();
-      const payloadString = JSON.stringify(webhookPayload);
-      const signature = SignatureGenerator.generate(payloadString);
 
       // const req = createMockRequest({
       //   body: webhookPayload,
