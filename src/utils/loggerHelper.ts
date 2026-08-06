@@ -2,7 +2,6 @@
 import { createLogger, format, transports, Logger as WinstonLogger } from 'winston';
 import config from '../config/config';
 import { getRequestContext } from '../middlewares/requestContext';
-import { getECSMetadataSync } from './ecsMetadata';
 
 interface LogData {
   [key: string]: unknown;
@@ -22,9 +21,6 @@ const isCloudEnv = ['prod', 'production', 'pre-prod', 'staging', 'dev', 'develop
 const isProdEnv = ['prod', 'production'].includes(process.env.NODE_ENV || '');
 
 const logLevel = config.server?.logLevel || process.env.LOG_LEVEL || (isCloudEnv ? 'info' : 'debug');
-
-// Cache ECS metadata on startup (avoid repeated calls)
-const ecsMetadata = getECSMetadataSync();
 
 // Create Winston logger instance
 const winstonLogger: WinstonLogger = createLogger({
@@ -66,49 +62,48 @@ if (isCloudEnv) {
 }
 
 /**
- * Filter sensitive fields based on environment
- * In production: Hide detailed technical info
- * In lower environments: Show everything for debugging
+ * Filter sensitive fields based on environment.
+ * Cloud envs (staging/dev/pre-prod/prod): strip privacy-sensitive technical fields.
+ * Production additionally strips stack traces.
  */
 function filterByEnvironment(data: Record<string, unknown>): Record<string, unknown> {
-  if (!isProdEnv) {
-    // Lower environments: show everything
+  if (!isCloudEnv) {
     return data;
   }
 
-  // Production: Remove potentially sensitive technical details
   const filtered = { ...data };
-  const prodExcludedFields = [
-    'stack',           // Don't log stack traces in prod
-    'query',           // Don't log query strings
-    'headers',         // Don't log all headers
-    'user_agent',      // Don't log full user agent in prod
-    'source_ip',       // Don't log source IPs in prod (privacy)
+  const cloudExcludedFields = [
+    'query',
+    'headers',
+    'user_agent',
+    'source_ip',
   ];
 
-  for (const field of prodExcludedFields) {
+  for (const field of cloudExcludedFields) {
     if (field in filtered) {
       delete filtered[field];
     }
+  }
+
+  if (isProdEnv && 'stack' in filtered) {
+    delete filtered.stack;
   }
 
   return filtered;
 }
 
 /**
- * Enrich log data with request context and ECS metadata
+ * Enrich log data with request context.
+ * ECS metadata is intentionally omitted — CloudWatch already tags the log stream.
  */
 function enrichLogData(data: LogData, moduleName: string): Record<string, unknown> {
-  // Get request context (if available)
   const context = getRequestContext();
 
-  // Start with base log data
   let enriched: Record<string, unknown> = {
     module: moduleName,
     ...data,
   };
 
-  // Add request context if available
   if (context) {
     enriched = {
       ...enriched,
@@ -116,19 +111,13 @@ function enrichLogData(data: LogData, moduleName: string): Record<string, unknow
       method: context.method,
       path: context.path,
       correlation_id: context.correlation_id,
-      // Add these only in lower environments
-      ...(isProdEnv ? {} : {
+      // IP / UA only for local debugging — never attached in cloud envs
+      ...(isCloudEnv ? {} : {
         user_agent: context.user_agent,
         source_ip: context.source_ip,
       }),
     };
   }
-
-  // Add ECS metadata (only non-empty fields)
-  if (ecsMetadata.ecs_task_id) enriched.ecs_task_id = ecsMetadata.ecs_task_id;
-  if (ecsMetadata.ecs_service) enriched.ecs_service = ecsMetadata.ecs_service;
-  if (ecsMetadata.ecs_cluster) enriched.ecs_cluster = ecsMetadata.ecs_cluster;
-  if (ecsMetadata.aws_region) enriched.aws_region = ecsMetadata.aws_region;
 
   return enriched;
 }
@@ -169,6 +158,18 @@ function sanitizeData(data: unknown): unknown {
     'webhook_secret',
     'signing_key',
     'signingkey',
+    // SYEIA-2392: PII, signatures, and payload dumps
+    'signature',
+    'pay-signature',
+    'x-webhook-signature',
+    'email',
+    'card_details',
+    'cardholder',
+    'billing_address',
+    'body',
+    'payload',
+    'raw_payload',
+    'rawbody',
   ];
 
   for (const key of Object.keys(sanitized)) {
