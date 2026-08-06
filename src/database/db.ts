@@ -30,7 +30,9 @@ async function createPoolConfig(): Promise<PoolConfig> {
       password = credentials.password;
       logger.info('Database credentials loaded from AWS Secrets Manager');
     } catch (error) {
-      logger.error('Failed to fetch DB credentials from Secrets Manager', { error });
+      logger.error('Failed to fetch DB credentials from Secrets Manager', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       throw error;
     }
   }
@@ -62,9 +64,6 @@ async function createPoolConfig(): Promise<PoolConfig> {
   }
 
   logger.info('Database pool configuration initialized', {
-    host: poolConfig.host,
-    port: poolConfig.port,
-    database: poolConfig.database,
     maxConnections: poolConfig.max,
     applicationName: poolConfig.application_name,
     ssl: !!poolConfig.ssl,

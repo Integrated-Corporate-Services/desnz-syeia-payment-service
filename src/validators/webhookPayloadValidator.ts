@@ -299,9 +299,9 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
   const result = validateWebhookPayload(req.body);
 
   if (!result.valid) {
+    // Log field + message only — omit body and error values (PII / card data)
     logger.warn('[WebhookValidator] Payload validation failed', {
-      errors: result.errors,
-      body: req.body,
+      errors: result.errors.map(({ field, message }) => ({ field, message })),
     });
 
     return res.status(400).json({

@@ -16,10 +16,11 @@ export function validateBACSWebhookPayloadMiddleware(
   const { error } = bacsWebhookSchema.validate(req.body);
 
   if (error) {
+    // Log field + message only — omit Joi values (may contain payment/PII data)
     const validationErrors = error.details.map((detail) => ({
       field: detail.path.join('.'),
       message: detail.message,
-      value: detail.context?.value,
+      type: detail.type,
     }));
 
     logger.warn('[BACSWebhook] Payload validation failed', {

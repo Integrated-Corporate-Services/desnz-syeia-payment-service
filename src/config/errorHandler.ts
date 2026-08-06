@@ -5,12 +5,11 @@ const logger = getLogger(module);
 
 export function registerErrorHandler(app: Express): void {
   app.use((req: Request, res: Response) => {
-    logger.warn('[HTTP] Route not found', { 
-      method: req.method, 
+    logger.warn('[HTTP] Route not found', {
+      method: req.method,
       path: req.path,
       url: req.url,
       originalUrl: req.originalUrl,
-      headers: req.headers,
     });
     
     res.status(404).json({ 

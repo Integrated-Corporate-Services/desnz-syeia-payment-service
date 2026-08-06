@@ -24,10 +24,10 @@ export function httpLoggingMiddleware(req: Request, res: Response, next: NextFun
   }
 
   // Log incoming request (debug level to avoid noise in prod)
+  // Do not log query strings or full headers — may contain sensitive data
   logger.debug('[HTTP] Request started', {
     method: req.method,
     path: req.path,
-    query: Object.keys(req.query).length > 0 ? req.query : undefined,
     content_type: req.headers['content-type'],
     content_length: req.headers['content-length'],
   });

@@ -165,11 +165,23 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
   return { username: user, password };
 }
 
+const isTestEnv = (process.env.NODE_ENV || '').toLowerCase() === 'test';
+
+function resolveConfiguredLogLevel(): string {
+  const requested = String(getConfigValue('LOG_LEVEL', isLocal ? 'debug' : 'info')).toLowerCase();
+  // Outside local/test, ignore debug/verbose — keep info+ only
+  if (!isLocal && !isTestEnv) {
+    const allowed = ['info', 'warn', 'error'];
+    return allowed.includes(requested) ? requested : 'info';
+  }
+  return requested;
+}
+
 export const serverConfig = {
   port: getNumberConfig('PORT', 3001),
   host: getConfigValue('HOST', '0.0.0.0'),
   nodeEnv: getConfigValue('NODE_ENV', 'local'),
-  logLevel: getConfigValue('LOG_LEVEL', isLocal ? 'debug' : 'info'),
+  logLevel: resolveConfiguredLogLevel(),
   timeout: getNumberConfig('SERVER_TIMEOUT', 30000),
   keepAliveTimeout: getNumberConfig('KEEP_ALIVE_TIMEOUT', 35000),
   requestTimeout: getNumberConfig('REQUEST_TIMEOUT', 25000),
