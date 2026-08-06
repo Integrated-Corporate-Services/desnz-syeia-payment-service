@@ -61,11 +61,7 @@ if (isCloudEnv) {
   }));
 }
 
-/**
- * Filter sensitive fields based on environment.
- * Cloud envs (staging/dev/pre-prod/prod): strip privacy-sensitive technical fields.
- * Production additionally strips stack traces.
- */
+
 function filterByEnvironment(data: Record<string, unknown>): Record<string, unknown> {
   if (!isCloudEnv) {
     return data;
@@ -158,7 +154,6 @@ function sanitizeData(data: unknown): unknown {
     'webhook_secret',
     'signing_key',
     'signingkey',
-    // SYEIA-2392: PII, signatures, and payload dumps
     'signature',
     'pay-signature',
     'x-webhook-signature',
