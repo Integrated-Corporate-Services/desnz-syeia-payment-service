@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 import getLogger from '../utils/loggerHelper';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 import { processWebhook } from '../services/paymentWebhookService';
 import { HTTP_STATUS } from '../constants/error.constants';
 import { checkDatabaseConnectivity } from '../database/db';
@@ -191,10 +192,12 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
     }
 
     if (result.retryable) {
+      const sanitizedError = createSanitizedErrorLog(result.error);
       logger.warn('Webhook processing encountered retryable error', {
         webhookId,
         paymentId,
-        error: result.error,
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
         correlationId,
       });
 
@@ -207,12 +210,16 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
     }
 
     // Permanent failure (e.g., invalid event type, database constraint violation)
-    logger.error('Webhook processing permanent error', {
-      webhookId,
-      paymentId,
-      error: result.error,
-      correlationId,
-    });
+    {
+      const sanitizedError = createSanitizedErrorLog(result.error);
+      logger.error('Webhook processing permanent error', {
+        webhookId,
+        paymentId,
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
+        correlationId,
+      });
+    }
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.PERMANENT_ERROR,
@@ -222,9 +229,10 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
     } as WebhookResponse);
     
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('Unexpected error processing webhook', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       webhookId,
       paymentId,
       correlationId,
@@ -267,7 +275,11 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[Health] Database connectivity check failed', { error: dbCheck.error });
+      const sanitizedError = createSanitizedErrorLog(dbCheck.error || 'Database connectivity check failed');
+      logger.error('[Health] Database connectivity check failed', {
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
+      });
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -276,7 +288,11 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[Health] Database check failed', { error: error instanceof Error ? error.message : String(error) });
+    const sanitizedError = createSanitizedErrorLog(error);
+    logger.error('[Health] Database check failed', {
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
+    });
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 

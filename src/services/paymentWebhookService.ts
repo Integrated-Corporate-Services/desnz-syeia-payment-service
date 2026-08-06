@@ -4,6 +4,7 @@
 // The pay-callback-relay Lambda will poll and send to SQS
 
 import getLogger from '../utils/loggerHelper';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 import * as paymentWebhookRepository from '../repositories/paymentWebhookRepository';
 import config from '../config/config';
 
@@ -108,11 +109,13 @@ export async function processWebhook(
   } catch (error: any) {
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
+    const sanitizedError = createSanitizedErrorLog(error);
 
     logger.error('[WebhookService] Error storing webhook', {
       webhookId,
       paymentId,
-      error: errorMessage,
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       code: error.code,
       duration,
       correlationId,

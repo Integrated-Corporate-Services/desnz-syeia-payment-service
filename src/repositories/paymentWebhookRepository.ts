@@ -18,6 +18,7 @@ import db from '../database/db';
 import { withTransaction } from '../database/db';
 import { PoolClient } from 'pg';
 import getLogger from '../utils/loggerHelper';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 import { WEBHOOK_QUERIES } from '../constants/sql.constants';
 
 const logger = getLogger(module);
@@ -91,8 +92,10 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
         isDuplicate: false,
       };
     } catch (error) {
+      const sanitizedError = createSanitizedErrorLog(error);
       logger.error('[WebhookRepository] Error creating webhook record (will be rolled back)', {
-        error: error instanceof Error ? error.message : String(error),
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
         webhookId: data.webhook_id,
       });
       throw error;
@@ -112,8 +115,10 @@ export async function findByWebhookId(webhookId: string): Promise<any | null> {
     const result = await db.query(WEBHOOK_QUERIES.FIND_BY_WEBHOOK_ID, [webhookId]);
     return result.rows?.[0] || null;
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[WebhookRepository] Error finding webhook', {
-      error: error instanceof Error ? error.message : String(error),
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       webhookId,
     });
     throw error;
@@ -136,8 +141,10 @@ export async function updateWebhookStatus(webhookId: string, status: string): Pr
       status,
     });
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[WebhookRepository] Error updating webhook status', {
-      error: error instanceof Error ? error.message : String(error),
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       webhookId,
     });
     throw error;
