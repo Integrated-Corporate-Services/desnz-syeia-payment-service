@@ -165,23 +165,12 @@ export async function getDbSecretConfig(): Promise<DbCredentials> {
   return { username: user, password };
 }
 
-const isTestEnv = (process.env.NODE_ENV || '').toLowerCase() === 'test';
-
-function resolveConfiguredLogLevel(): string {
-  const requested = String(getConfigValue('LOG_LEVEL', isLocal ? 'debug' : 'info')).toLowerCase();
-  // Outside local/test, ignore debug/verbose — keep info+ only
-  if (!isLocal && !isTestEnv) {
-    const allowed = ['info', 'warn', 'error'];
-    return allowed.includes(requested) ? requested : 'info';
-  }
-  return requested;
-}
-
 export const serverConfig = {
   port: getNumberConfig('PORT', 3001),
   host: getConfigValue('HOST', '0.0.0.0'),
   nodeEnv: getConfigValue('NODE_ENV', 'local'),
-  logLevel: resolveConfiguredLogLevel(),
+  // LOG_LEVEL controls verbosity; NODE_ENV is used separately for environment behaviour
+  logLevel: String(getConfigValue('LOG_LEVEL', 'info')).toLowerCase(),
   timeout: getNumberConfig('SERVER_TIMEOUT', 30000),
   keepAliveTimeout: getNumberConfig('KEEP_ALIVE_TIMEOUT', 35000),
   requestTimeout: getNumberConfig('REQUEST_TIMEOUT', 25000),
@@ -199,7 +188,7 @@ export const dbConfig = {
   idleTimeoutMs: getNumberConfig('DB_IDLE_MS', 20000),
   connectionTimeoutMs: getNumberConfig('DB_CONN_MS', 15000),
   queryTimeoutMs: getNumberConfig('DB_QUERY_MS', 40000),
-  sslMode: getConfigValue('PGSSLMODE', isLocal ? 'disable' : 'require'),
+  sslMode: getConfigValue('SSLMODE', isLocal ? 'disable' : 'require'),
   applicationName: getConfigValue('DB_APPLICATION_NAME', 'integration-service'),
 };
 

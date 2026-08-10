@@ -9,7 +9,7 @@ process.env.DB_PORT = '5432';
 process.env.DB_NAME = 'dummy';
 process.env.DB_USER = 'postgres';
 process.env.DB_PASSWORD = 'dummy';
-process.env.PGSSLMODE = 'disable';
+process.env.SSLMODE = 'disable';
 
 process.env.GOVPAY_WEBHOOK_SIGNING_KEY = 'test-dummy';  
 process.env.GOVPAY_API_KEY = 'test-dummy';                      

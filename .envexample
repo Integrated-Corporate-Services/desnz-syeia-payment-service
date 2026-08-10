@@ -10,7 +10,7 @@ DB_PORT=5432
 DB_NAME=appdb
 DB_USER=postgres
 DB_PASSWORD=postgres
-PGSSLMODE=disable
+SSLMODE=disable
 
 # Environment
 NODE_ENV=local

@@ -22,25 +22,8 @@ const isCloudEnv = ['prod', 'production', 'pre-prod', 'staging', 'dev', 'develop
 
 const isProdEnv = ['prod', 'production'].includes(nodeEnv);
 
-const isLocalOrTest = ['local', 'test'].includes(nodeEnv);
-
-/**
- * Resolve log level. Outside local/test, force info+ (ignore LOG_LEVEL=debug).
- */
-function resolveLogLevel(): string {
-  const requested = String(
-    config.server?.logLevel || process.env.LOG_LEVEL || (isCloudEnv ? 'info' : 'debug')
-  ).toLowerCase();
-
-  if (!isLocalOrTest) {
-    const allowedCloudLevels = ['info', 'warn', 'error'];
-    return allowedCloudLevels.includes(requested) ? requested : 'info';
-  }
-
-  return requested;
-}
-
-const logLevel = resolveLogLevel();
+// Log level comes from LOG_LEVEL via config (NODE_ENV drives env behaviour only)
+const logLevel = String(config.server?.logLevel || process.env.LOG_LEVEL || 'info').toLowerCase();
 
 // Create Winston logger instance
 const winstonLogger: WinstonLogger = createLogger({
