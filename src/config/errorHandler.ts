@@ -1,5 +1,6 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 
 const logger = getLogger(module);
 
@@ -8,14 +9,11 @@ export function registerErrorHandler(app: Express): void {
     logger.warn('[HTTP] Route not found', {
       method: req.method,
       path: req.path,
-      url: req.url,
-      originalUrl: req.originalUrl,
     });
     
     res.status(404).json({ 
       error: 'Route not found',
       requestedPath: req.path,
-      requestedUrl: req.url,
       method: req.method,
       availableRoutes: {
         govukPay: {
@@ -36,18 +34,20 @@ export function registerErrorHandler(app: Express): void {
 
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     if (err instanceof SyntaxError && 'body' in err) {
+      const sanitizedError = createSanitizedErrorLog(err);
       logger.warn('[HTTP] Invalid JSON in request body', {
-        error: err.message,
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
         method: req.method,
         path: req.path,
       });
       return res.status(400).json({ error: 'Invalid JSON in request body' });
     }
 
-    // Handle other errors
+    const sanitizedError = createSanitizedErrorLog(err);
     logger.error('[HTTP] Error', {
-      error: err.message,
-      stack: err.stack,
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
       method: req.method,
       path: req.path,
     });

@@ -2,6 +2,7 @@
 import { Pool, PoolConfig, PoolClient } from 'pg';
 import { dbConfig, getDbSecretConfig } from '../config/config';
 import getLogger from '../utils/loggerHelper';
+import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 
 const logger = getLogger(module);
 const isLocal = process.env.NODE_ENV === 'local';
@@ -30,8 +31,10 @@ async function createPoolConfig(): Promise<PoolConfig> {
       password = credentials.password;
       logger.info('Database credentials loaded from AWS Secrets Manager');
     } catch (error) {
+      const sanitizedError = createSanitizedErrorLog(error);
       logger.error('Failed to fetch DB credentials from Secrets Manager', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
       });
       throw error;
     }
@@ -97,10 +100,11 @@ function initializePool(): Promise<Pool> {
       // Handle pool errors
       pool.on('error', (err: Error, client: PoolClient) => {
         const dbError = err as DatabaseError;
+        const sanitizedError = createSanitizedErrorLog(err);
         logger.error('Unexpected error on idle database client', {
-          error: err.message,
+          error_message: sanitizedError.sanitized_message,
+          error_type: sanitizedError.error_type,
           code: dbError.code,
-          stack: err.stack,
         });
         
         // Mark pool as unhealthy for health checks
@@ -148,8 +152,11 @@ export async function closePool(): Promise<void> {
     await currentPool.end();
     logger.info('Database pool closed successfully');
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error('Error closing database pool', { error: errorMessage });
+    const sanitizedError = createSanitizedErrorLog(error);
+    logger.error('Error closing database pool', {
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
+    });
     throw error;
   }
 }
@@ -176,8 +183,10 @@ export async function withTransaction<T>(
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[DB] Transaction rolled back', {
-      error: error instanceof Error ? error.message : String(error),
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
     });
     throw error;
   } finally {
@@ -205,8 +214,10 @@ export async function withTransactionIsolation<T>(
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
+    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[DB] Transaction rolled back', {
-      error: error instanceof Error ? error.message : String(error),
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
     });
     throw error;
   } finally {
@@ -227,8 +238,9 @@ export async function checkDatabaseConnectivity(): Promise<{ connected: boolean;
     return { connected: true, latencyMs };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return { connected: false, latencyMs, error: errorMessage };
+    // Return sanitized message — health endpoints may expose this field
+    const sanitizedError = createSanitizedErrorLog(error);
+    return { connected: false, latencyMs, error: sanitizedError.sanitized_message };
   }
 }
 

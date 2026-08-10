@@ -189,21 +189,30 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
     health.checks.database = {
       status: dbCheck.connected ? 'up' : 'down',
       latency_ms: dbCheck.latencyMs,
+      // dbCheck.error is already sanitized by checkDatabaseConnectivity
       ...(dbCheck.error && { error: dbCheck.error }),
     };
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[BACSHealth] Database down', { error: dbCheck.error });
+      const sanitizedError = createSanitizedErrorLog(dbCheck.error || 'Database connectivity check failed');
+      logger.error('[BACSHealth] Database down', {
+        error_message: sanitizedError.sanitized_message,
+        error_type: sanitizedError.error_type,
+      });
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     health.status = 'unhealthy';
     health.checks.database = {
       status: 'down',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: sanitizedError.sanitized_message,
     };
-    logger.error('[BACSHealth] Check failed', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('[BACSHealth] Check failed', {
+      error_message: sanitizedError.sanitized_message,
+      error_type: sanitizedError.error_type,
+    });
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 

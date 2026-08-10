@@ -270,6 +270,7 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
     };
 
     if (dbCheck.error) {
+      // dbCheck.error is already sanitized by checkDatabaseConnectivity
       health.checks.database.error = dbCheck.error;
     }
 
@@ -283,12 +284,12 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
+    const sanitizedError = createSanitizedErrorLog(error);
     health.status = 'unhealthy';
     health.checks.database = {
       status: 'down',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: sanitizedError.sanitized_message,
     };
-    const sanitizedError = createSanitizedErrorLog(error);
     logger.error('[Health] Database check failed', {
       error_message: sanitizedError.sanitized_message,
       error_type: sanitizedError.error_type,

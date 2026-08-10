@@ -107,7 +107,6 @@ export async function processWebhook(
       paymentId,
     };
   } catch (error: any) {
-    const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
     const sanitizedError = createSanitizedErrorLog(error);
 
@@ -125,7 +124,7 @@ export async function processWebhook(
       success: false,
       isDuplicate: false,
       paymentId,
-      error: errorMessage,
+      error: sanitizedError.sanitized_message,
       errorCode: error.code || ERROR_CODES.DATABASE_ERROR,
     };
   }
