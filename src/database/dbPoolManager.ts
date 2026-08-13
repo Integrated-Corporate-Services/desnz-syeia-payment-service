@@ -20,10 +20,10 @@
 
 import { Pool, PoolConfig } from 'pg';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { getDbCredentials } from '../config/config';
-import { logInfo, logError, logWarn, logDebug } from '../utils/loggerHelper';
+import { dbConfig } from '../config/config';
+import getLogger from '../utils/loggerHelper';
 
-const context = 'DBPoolManager';
+const logger = getLogger(module);
 
 interface DbCredentials {
   username: string;
@@ -39,7 +39,7 @@ const isLocal = (process.env.NODE_ENV || '').toLowerCase() === 'local';
 class DatabasePoolManager {
   private currentPool: Pool | null = null;
   private currentCredentials: DbCredentials | null = null;
-  private isRefreshing: boolean = false;
+  private isRefreshing = false;
 
   /**
    * Build SSL configuration for AWS RDS
@@ -62,14 +62,17 @@ class DatabasePoolManager {
     if (!this.currentPool) {
       await this.initializePool();
     }
-    return this.currentPool!;
+    if (!this.currentPool) {
+      throw new Error('Failed to initialize database pool');
+    }
+    return this.currentPool;
   }
 
   /**
    * Initialize database pool with credentials
    */
   private async initializePool(): Promise<void> {
-    logInfo(context, '[initializePool] Initializing database connection pool');
+    logger.info('[DBPoolManager] Initializing database connection pool');
 
     const credentials = await this.loadInitialCredentials();
     this.currentCredentials = credentials;
@@ -79,12 +82,7 @@ class DatabasePoolManager {
 
     this.setupEventHandlers();
 
-    logInfo(context, '[initializePool] Database pool initialized successfully', {
-      host: poolConfig.host,
-      database: poolConfig.database,
-      credentialSource: process.env.DB_CREDENTIALS ? 'DB_CREDENTIALS' : 'environment',
-      rotationEnabled: !!process.env.DB_CREDENTIALS_SECRET_ARN
-    });
+    logger.info('[DBPoolManager] Database pool initialized successfully');
   }
 
   /**
@@ -97,20 +95,19 @@ class DatabasePoolManager {
         if (!parsed.username || !parsed.password) {
           throw new Error('DB_CREDENTIALS must contain username and password');
         }
-        logInfo(context, '[loadInitialCredentials] Loaded credentials from DB_CREDENTIALS');
+        logger.info('[DBPoolManager] Loaded credentials from DB_CREDENTIALS');
         return parsed;
       } catch (error) {
-        logError(context, '[loadInitialCredentials] Failed to parse DB_CREDENTIALS', error as Error);
+        logger.error('[DBPoolManager] Failed to parse DB_CREDENTIALS', { error });
         throw error;
       }
     }
 
     // Fallback to environment variables via config
-    logInfo(context, '[loadInitialCredentials] Using credentials from environment');
-    const envCreds = getDbCredentials();
+    logger.info('[DBPoolManager] Using credentials from environment');
     return {
-      username: envCreds.user,
-      password: envCreds.password,
+      username: dbConfig.user,
+      password: dbConfig.password,
     };
   }
 
@@ -118,9 +115,9 @@ class DatabasePoolManager {
    * Create pool configuration
    */
   private createPoolConfig(credentials: DbCredentials): PoolConfig {
-    const dbHost = (credentials as any).host || process.env.DB_HOST;
-    const dbPort = Number((credentials as any).port || process.env.DB_PORT || 5432);
-    const dbName = (credentials as any).dbname || process.env.DB_NAME;
+    const dbHost = credentials.host || process.env.DB_HOST;
+    const dbPort = Number(credentials.port || process.env.DB_PORT || 5432);
+    const dbName = credentials.dbname || process.env.DB_NAME;
     const poolMax = Number(process.env.DB_POOL_MAX || 20);
     const idleTimeoutMs = Number(process.env.DB_IDLE_TIMEOUT_MS || 10000);
     const connectionTimeoutMs = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
@@ -151,27 +148,27 @@ class DatabasePoolManager {
     if (!this.currentPool) return;
 
     this.currentPool.on('connect', () => {
-      logDebug(context, '[setupEventHandlers] New connection established');
+      logger.debug('[DBPoolManager] New connection established');
     });
 
-    this.currentPool.on('error', (err: any) => {
-      logError(context, '[setupEventHandlers] Pool error', err);
+    this.currentPool.on('error', (err: Error & { code?: string }) => {
+      logger.error('[DBPoolManager] Pool error', { error: err });
 
       // Detect authentication failures (password rotation)
       if (
         err.code === '28P01' ||
         err.message?.toLowerCase().includes('password authentication failed')
       ) {
-        logWarn(context, '[setupEventHandlers] Authentication error detected - password may have been rotated');
+        logger.warn('[DBPoolManager] Authentication error detected - password may have been rotated');
         
         if (process.env.DB_CREDENTIALS_SECRET_ARN) {
-          logInfo(context, '[setupEventHandlers] Triggering automatic credential refresh');
+          logger.info('[DBPoolManager] Triggering automatic credential refresh');
           this.refreshCredentials().catch((refreshErr) => {
-            logError(context, '[setupEventHandlers] Failed to refresh credentials', refreshErr as Error);
+            logger.error('[DBPoolManager] Failed to refresh credentials', { error: refreshErr });
           });
         } else {
-          logWarn(context, '[setupEventHandlers] DB_CREDENTIALS_SECRET_ARN not configured - cannot auto-refresh');
-          logWarn(context, '[setupEventHandlers] ECS restart required to pick up new password');
+          logger.warn('[DBPoolManager] DB_CREDENTIALS_SECRET_ARN not configured - cannot auto-refresh');
+          logger.warn('[DBPoolManager] ECS restart required to pick up new password');
         }
       }
     });
@@ -182,13 +179,13 @@ class DatabasePoolManager {
    */
   async refreshCredentials(): Promise<void> {
     if (this.isRefreshing) {
-      logDebug(context, '[refreshCredentials] Credential refresh already in progress');
+      logger.debug('[DBPoolManager] Credential refresh already in progress');
       return;
     }
 
     const secretArn = process.env.DB_CREDENTIALS_SECRET_ARN;
     if (!secretArn) {
-      logWarn(context, '[refreshCredentials] Cannot refresh - DB_CREDENTIALS_SECRET_ARN not configured');
+      logger.warn('[DBPoolManager] Cannot refresh - DB_CREDENTIALS_SECRET_ARN not configured');
       return;
     }
 
@@ -196,13 +193,10 @@ class DatabasePoolManager {
     
     try {
       this.isRefreshing = true;
-      logInfo(context, '[refreshCredentials] CREDENTIAL REFRESH STARTED', {
-        secretArnConfigured: true,
-        timestamp: new Date().toISOString(),
-      });
+      logger.info('[DBPoolManager] CREDENTIAL REFRESH STARTED');
 
       // Fetch fresh credentials from Secrets Manager
-      logInfo(context, '[refreshCredentials] Fetching fresh credentials from Secrets Manager');
+      logger.info('[DBPoolManager] Fetching fresh credentials from Secrets Manager');
       const newCredentials = await this.fetchCredentialsFromSecretsManager(secretArn);
 
       // Check if credentials actually changed
@@ -211,25 +205,18 @@ class DatabasePoolManager {
         this.currentCredentials?.password !== newCredentials.password;
 
       if (credentialsChanged) {
-        logInfo(context, '[refreshCredentials] Credentials changed - recreating pool', {
-          usernameChanged: this.currentCredentials?.username !== newCredentials.username,
-          passwordChanged: this.currentCredentials?.password !== newCredentials.password,
-        });
+        logger.info('[DBPoolManager] Credentials changed - recreating pool');
 
         await this.recreatePool(newCredentials);
 
         const refreshDuration = Date.now() - refreshStartTime;
-        logInfo(context, '[refreshCredentials] CREDENTIAL REFRESH COMPLETED', {
-          refreshDurationMs: refreshDuration,
-        });
+        logger.info('[DBPoolManager] CREDENTIAL REFRESH COMPLETED');
       } else {
-        logInfo(context, '[refreshCredentials] Credentials unchanged - pool error may be transient');
+        logger.info('[DBPoolManager] Credentials unchanged - pool error may be transient');
       }
     } catch (error) {
       const refreshDuration = Date.now() - refreshStartTime;
-      logError(context, '[refreshCredentials] CREDENTIAL REFRESH FAILED', error as Error, {
-        refreshDurationMs: refreshDuration,
-      });
+      logger.error('[DBPoolManager] CREDENTIAL REFRESH FAILED', { error });
       throw error;
     } finally {
       this.isRefreshing = false;
@@ -243,7 +230,7 @@ class DatabasePoolManager {
     const region = process.env.AWS_REGION || 'eu-west-2';
     const client = new SecretsManagerClient({ region });
 
-    logInfo(context, '[fetchCredentialsFromSecretsManager] Calling Secrets Manager', { secretArn });
+    logger.info('[DBPoolManager] Calling Secrets Manager');
 
     const command = new GetSecretValueCommand({ SecretId: secretArn });
     const response = await client.send(command);
@@ -258,11 +245,7 @@ class DatabasePoolManager {
       throw new Error('Secret must contain username and password fields');
     }
 
-    logInfo(context, '[fetchCredentialsFromSecretsManager] Successfully fetched credentials from Secrets Manager', {
-      hasUsername: !!parsed.username,
-      hasPassword: !!parsed.password,
-      hasHost: !!parsed.host,
-    });
+    logger.info('[DBPoolManager] Successfully fetched credentials from Secrets Manager');
 
     return parsed;
   }
@@ -271,11 +254,11 @@ class DatabasePoolManager {
    * Recreate pool with new credentials
    */
   private async recreatePool(newCredentials: DbCredentials): Promise<void> {
-    logInfo(context, '[recreatePool] Recreating connection pool with new credentials');
+    logger.info('[DBPoolManager] Recreating connection pool with new credentials');
 
     // Close existing pool
     if (this.currentPool) {
-      logInfo(context, '[recreatePool] Closing old connection pool');
+      logger.info('[DBPoolManager] Closing old connection pool');
       await this.currentPool.end();
       this.currentPool = null;
     }
@@ -286,7 +269,7 @@ class DatabasePoolManager {
     this.currentPool = new Pool(poolConfig);
     this.setupEventHandlers();
 
-    logInfo(context, '[recreatePool] New connection pool created successfully');
+    logger.info('[DBPoolManager] New connection pool created successfully');
   }
 
   /**
@@ -294,10 +277,10 @@ class DatabasePoolManager {
    */
   async closePool(): Promise<void> {
     if (this.currentPool) {
-      logInfo(context, '[closePool] Closing connection pool');
+      logger.info('[DBPoolManager] Closing connection pool');
       await this.currentPool.end();
       this.currentPool = null;
-      logInfo(context, '[closePool] Connection pool closed');
+      logger.info('[DBPoolManager] Connection pool closed');
     }
   }
 }

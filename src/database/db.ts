@@ -124,16 +124,19 @@ const dbProxy: any = {
   end: async () => closePool(),
   on: (event: any, listener: any) => {
     // This will be set up once pool is initialized
-    initializePool().then((p) => (p as any).on(event, listener));
+    getPool().then((p) => (p as any).on(event, listener));
   },
   get totalCount() {
-    return pool?.totalCount || 0;
+    // Pool stats require async access - return 0 for backward compatibility
+    return 0;
   },
   get idleCount() {
-    return pool?.idleCount || 0;
+    // Pool stats require async access - return 0 for backward compatibility
+    return 0;
   },
   get waitingCount() {
-    return pool?.waitingCount || 0;
+    // Pool stats require async access - return 0 for backward compatibility
+    return 0;
   },
 };
 
