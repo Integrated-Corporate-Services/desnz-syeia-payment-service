@@ -128,7 +128,6 @@ const dbProxy: any = {
       .then((p) => (p as any).on(event, listener))
       .catch((error) => {
         logger.error('[DB] Failed to attach event listener', {
-          event,
           error: error instanceof Error ? error.message : String(error),
         });
       });
