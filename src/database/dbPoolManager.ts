@@ -43,20 +43,40 @@ class DatabasePoolManager {
 
   /**
    * Build SSL configuration for AWS RDS
+   * By default, validates server certificates for security.
+   * Set DB_SSL_REJECT_UNAUTHORIZED=false to disable (not recommended for production)
    */
   private buildSslConfig(): boolean | { require: boolean; rejectUnauthorized: boolean } {
     if (isLocal) return false;
     const sslMode = (process.env.PGSSLMODE || dbConfig.sslMode || '').toLowerCase();
     if (sslMode === 'disable') return false;
     
+    // Allow disabling certificate verification via env var, but default to true for security
+    const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+    
     return {
       require: true,
-      rejectUnauthorized: false,
+      rejectUnauthorized,
     };
   }
 
   /**
+   * Check if error is an authentication failure
+   */
+  private isAuthenticationError(error: unknown): boolean {
+    if (error instanceof Error) {
+      const pgError = error as Error & { code?: string };
+      return (
+        pgError.code === '28P01' ||
+        pgError.message?.toLowerCase().includes('password authentication failed')
+      );
+    }
+    return false;
+  }
+
+  /**
    * Get current pool instance (creates if needed)
+   * Returns a wrapped pool that handles authentication failures with automatic refresh
    */
   async getPool(): Promise<Pool> {
     if (!this.currentPool) {
@@ -65,7 +85,78 @@ class DatabasePoolManager {
     if (!this.currentPool) {
       throw new Error('Failed to initialize database pool');
     }
-    return this.currentPool;
+    
+    // Wrap the pool to intercept authentication failures
+    return this.wrapPoolWithAutoRefresh(this.currentPool);
+  }
+
+  /**
+   * Wrap pool to detect authentication failures and trigger automatic refresh with retry
+   */
+  private wrapPoolWithAutoRefresh(pool: Pool): Pool {
+    const originalQuery = pool.query.bind(pool);
+    const originalConnect = pool.connect.bind(pool);
+
+    // Wrap query method
+    (pool as any).query = async (...args: any[]): Promise<any> => {
+      try {
+        return await (originalQuery as any)(...args);
+      } catch (error) {
+        if (this.isAuthenticationError(error)) {
+          logger.warn('[DBPoolManager] [query] Authentication error detected during query - attempting credential refresh');
+          
+          // Check if refresh is available
+          const hasSecretArn = 
+            process.env.DB_CREDENTIALS_SECRET_ARN || 
+            process.env.DB_CREDENTIALS?.startsWith('arn:aws:secretsmanager:');
+          
+          if (hasSecretArn && !this.isRefreshing) {
+            try {
+              await this.refreshCredentials();
+              logger.info('[DBPoolManager] [query] Retrying query after credential refresh');
+              // Retry once with refreshed pool
+              if (this.currentPool) {
+                return await (this.currentPool.query as any)(...args);
+              }
+            } catch (refreshError) {
+              logger.error('[DBPoolManager] [query] Credential refresh failed', { error: refreshError });
+            }
+          }
+        }
+        throw error;
+      }
+    };
+
+    // Wrap connect method
+    (pool as any).connect = async (...args: any[]): Promise<any> => {
+      try {
+        return await (originalConnect as any)(...args);
+      } catch (error) {
+        if (this.isAuthenticationError(error)) {
+          logger.warn('[DBPoolManager] [connect] Authentication error detected during connect - attempting credential refresh');
+          
+          const hasSecretArn = 
+            process.env.DB_CREDENTIALS_SECRET_ARN || 
+            process.env.DB_CREDENTIALS?.startsWith('arn:aws:secretsmanager:');
+          
+          if (hasSecretArn && !this.isRefreshing) {
+            try {
+              await this.refreshCredentials();
+              logger.info('[DBPoolManager] [connect] Retrying connect after credential refresh');
+              // Retry once with refreshed pool
+              if (this.currentPool) {
+                return await (this.currentPool.connect as any)(...args);
+              }
+            } catch (refreshError) {
+              logger.error('[DBPoolManager] [connect] Credential refresh failed', { error: refreshError });
+            }
+          }
+        }
+        throw error;
+      }
+    };
+
+    return pool;
   }
 
   /**
