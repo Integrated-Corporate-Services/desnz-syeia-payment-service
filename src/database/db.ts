@@ -124,7 +124,14 @@ const dbProxy: any = {
   end: async () => closePool(),
   on: (event: any, listener: any) => {
     // This will be set up once pool is initialized
-    getPool().then((p) => (p as any).on(event, listener));
+    getPool()
+      .then((p) => (p as any).on(event, listener))
+      .catch((error) => {
+        logger.error('[DB] Failed to attach event listener', {
+          event,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
   },
   get totalCount() {
     // Pool stats require async access - return 0 for backward compatibility

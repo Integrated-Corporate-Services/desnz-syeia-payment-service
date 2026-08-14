@@ -229,37 +229,42 @@ class DatabasePoolManager {
     const region = process.env.AWS_REGION || 'eu-west-2';
     const client = new SecretsManagerClient({ region });
 
-    logger.info('[DBPoolManager] Calling Secrets Manager', { secretArn });
+    try {
+      logger.info('[DBPoolManager] Calling Secrets Manager', { secretArn });
 
-    const command = new GetSecretValueCommand({ SecretId: secretArn });
-    const response = await client.send(command);
+      const command = new GetSecretValueCommand({ SecretId: secretArn });
+      const response = await client.send(command);
 
-    let secretString: string;
-    
-    // Support both SecretString and SecretBinary
-    if (response.SecretString) {
-      secretString = response.SecretString;
-    } else if (response.SecretBinary) {
-      // Decode binary secret to string
-      const buffer = Buffer.from(response.SecretBinary);
-      secretString = buffer.toString('utf-8');
-    } else {
-      throw new Error('Secret has neither SecretString nor SecretBinary');
+      let secretString: string;
+      
+      // Support both SecretString and SecretBinary
+      if (response.SecretString) {
+        secretString = response.SecretString;
+      } else if (response.SecretBinary) {
+        // Decode binary secret to string
+        const buffer = Buffer.from(response.SecretBinary);
+        secretString = buffer.toString('utf-8');
+      } else {
+        throw new Error('Secret has neither SecretString nor SecretBinary');
+      }
+
+      const parsed = JSON.parse(secretString);
+      
+      if (!parsed.username || !parsed.password) {
+        throw new Error('Secret must contain username and password fields');
+      }
+
+      logger.info('[DBPoolManager] Successfully fetched credentials from Secrets Manager', {
+        hasUsername: !!parsed.username,
+        hasPassword: !!parsed.password,
+        hasHost: !!parsed.host,
+      });
+
+      return parsed;
+    } finally {
+      // Clean up client to prevent socket/file descriptor leaks
+      client.destroy();
     }
-
-    const parsed = JSON.parse(secretString);
-    
-    if (!parsed.username || !parsed.password) {
-      throw new Error('Secret must contain username and password fields');
-    }
-
-    logger.info('[DBPoolManager] Successfully fetched credentials from Secrets Manager', {
-      hasUsername: !!parsed.username,
-      hasPassword: !!parsed.password,
-      hasHost: !!parsed.host,
-    });
-
-    return parsed;
   }
 
   /**
