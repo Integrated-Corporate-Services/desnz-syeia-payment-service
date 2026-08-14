@@ -63,26 +63,32 @@ function needRefreshSecret(): boolean {
 
 async function fetchSecretFromAWS(secretArn: string, region: string = 'eu-west-2'): Promise<DbCredentials> {
   const secretsClient = new SecretsManagerClient({ region });
-  const cmd = new GetSecretValueCommand({ SecretId: secretArn });
-  const res = await secretsClient.send(cmd);
-  
-  let payload: string;
-  if (res.SecretString) {
-    payload = res.SecretString;
-  } else if (res.SecretBinary) {
-    payload = Buffer.from(res.SecretBinary as Uint8Array).toString('utf8');
-  } else {
-    throw new Error('Secret has no SecretString or SecretBinary.');
-  }
   
   try {
-    const parsed = JSON.parse(payload);
-    if (!parsed.username || !parsed.password) {
-      throw new Error("Secret JSON must contain 'username' and 'password'.");
+    const cmd = new GetSecretValueCommand({ SecretId: secretArn });
+    const res = await secretsClient.send(cmd);
+    
+    let payload: string;
+    if (res.SecretString) {
+      payload = res.SecretString;
+    } else if (res.SecretBinary) {
+      payload = Buffer.from(res.SecretBinary as Uint8Array).toString('utf8');
+    } else {
+      throw new Error('Secret has no SecretString or SecretBinary.');
     }
-    return parsed;
-  } catch (err) {
-    throw new Error(`Failed to parse secret JSON: ${err}`);
+    
+    try {
+      const parsed = JSON.parse(payload);
+      if (!parsed.username || !parsed.password) {
+        throw new Error("Secret JSON must contain 'username' and 'password'.");
+      }
+      return parsed;
+    } catch (err) {
+      throw new Error(`Failed to parse secret JSON: ${err}`);
+    }
+  } finally {
+    // Clean up client to prevent socket/file descriptor leaks
+    secretsClient.destroy();
   }
 }
 
