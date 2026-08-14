@@ -149,13 +149,18 @@ class DatabasePoolManager {
       ) {
         logger.warn('[DBPoolManager] Authentication error detected - password may have been rotated');
         
-        if (process.env.DB_CREDENTIALS_SECRET_ARN) {
+        // Check if we have a Secrets Manager ARN available for refresh
+        const hasSecretArn = 
+          process.env.DB_CREDENTIALS_SECRET_ARN || 
+          process.env.DB_CREDENTIALS?.startsWith('arn:aws:secretsmanager:');
+        
+        if (hasSecretArn) {
           logger.info('[DBPoolManager] Triggering automatic credential refresh');
           this.refreshCredentials().catch((refreshErr) => {
             logger.error('[DBPoolManager] Failed to refresh credentials', { error: refreshErr });
           });
         } else {
-          logger.warn('[DBPoolManager] DB_CREDENTIALS_SECRET_ARN not configured - cannot auto-refresh');
+          logger.warn('[DBPoolManager] No Secrets Manager ARN configured - cannot auto-refresh');
           logger.warn('[DBPoolManager] ECS restart required to pick up new password');
         }
       }
