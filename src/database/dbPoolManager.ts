@@ -20,7 +20,7 @@
 
 import { Pool, PoolConfig } from 'pg';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { dbConfig } from '../config/config';
+import { dbConfig, getDbSecretConfig } from '../config/config';
 import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
@@ -46,7 +46,7 @@ class DatabasePoolManager {
    */
   private buildSslConfig(): boolean | { require: boolean; rejectUnauthorized: boolean } {
     if (isLocal) return false;
-    const sslMode = (process.env.DB_SSLMODE || '').toLowerCase();
+    const sslMode = (process.env.PGSSLMODE || dbConfig.sslMode || '').toLowerCase();
     if (sslMode === 'disable') return false;
     
     return {
@@ -89,41 +89,28 @@ class DatabasePoolManager {
    * Load initial credentials from DB_CREDENTIALS or environment
    */
   private async loadInitialCredentials(): Promise<DbCredentials> {
-    if (process.env.DB_CREDENTIALS) {
-      try {
-        const parsed = JSON.parse(process.env.DB_CREDENTIALS);
-        if (!parsed.username || !parsed.password) {
-          throw new Error('DB_CREDENTIALS must contain username and password');
-        }
-        logger.info('[DBPoolManager] Loaded credentials from DB_CREDENTIALS');
-        return parsed;
-      } catch (error) {
-        logger.error('[DBPoolManager] Failed to parse DB_CREDENTIALS', { error });
-        throw error;
-      }
+    // Use the existing getDbSecretConfig which handles ARN, JSON, and env vars
+    try {
+      const credentials = await getDbSecretConfig();
+      logger.info('[DBPoolManager] Loaded credentials via getDbSecretConfig');
+      return credentials;
+    } catch (error) {
+      logger.error('[DBPoolManager] Failed to load credentials', { error });
+      throw error;
     }
-
-    // Fallback to environment variables via config
-    logger.info('[DBPoolManager] Using credentials from environment');
-    return {
-      username: dbConfig.user,
-      password: dbConfig.password,
-    };
   }
 
   /**
    * Create pool configuration
    */
   private createPoolConfig(credentials: DbCredentials): PoolConfig {
-    const dbHost = credentials.host || process.env.DB_HOST;
-    const dbPort = Number(credentials.port || process.env.DB_PORT || 5432);
-    const dbName = credentials.dbname || process.env.DB_NAME;
-    const poolMax = Number(process.env.DB_POOL_MAX || 20);
-    const idleTimeoutMs = Number(process.env.DB_IDLE_TIMEOUT_MS || 10000);
-    const connectionTimeoutMs = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
+    const dbHost = credentials.host || dbConfig.host;
+    const dbPort = Number(credentials.port || dbConfig.port);
+    const dbName = credentials.dbname || dbConfig.database;
+    const appName = dbConfig.applicationName || 'payment-callback-service';
 
     if (!dbHost || !dbName) {
-      throw new Error('Database host and name are required (DB_HOST, DB_NAME)');
+      throw new Error('Database host and name are required');
     }
 
     return {
@@ -132,12 +119,13 @@ class DatabasePoolManager {
       database: dbName,
       user: credentials.username,
       password: credentials.password,
-      max: poolMax,
-      idleTimeoutMillis: idleTimeoutMs,
-      connectionTimeoutMillis: connectionTimeoutMs,
+      max: dbConfig.poolMax,
+      idleTimeoutMillis: dbConfig.idleTimeoutMs,
+      connectionTimeoutMillis: dbConfig.connectionTimeoutMs,
+      query_timeout: dbConfig.queryTimeoutMs,
       ssl: this.buildSslConfig(),
       keepAlive: true,
-      application_name: 'payment-callback-service',
+      application_name: appName,
     };
   }
 
@@ -183,9 +171,15 @@ class DatabasePoolManager {
       return;
     }
 
-    const secretArn = process.env.DB_CREDENTIALS_SECRET_ARN;
+    // Check DB_CREDENTIALS_SECRET_ARN first, then fall back to DB_CREDENTIALS if it's an ARN
+    let secretArn = process.env.DB_CREDENTIALS_SECRET_ARN;
+    if (!secretArn && process.env.DB_CREDENTIALS?.startsWith('arn:aws:secretsmanager:')) {
+      secretArn = process.env.DB_CREDENTIALS;
+      logger.info('[DBPoolManager] Using DB_CREDENTIALS as secret ARN for refresh');
+    }
+    
     if (!secretArn) {
-      logger.warn('[DBPoolManager] Cannot refresh - DB_CREDENTIALS_SECRET_ARN not configured');
+      logger.warn('[DBPoolManager] Cannot refresh - no Secrets Manager ARN configured');
       return;
     }
 
@@ -210,13 +204,18 @@ class DatabasePoolManager {
         await this.recreatePool(newCredentials);
 
         const refreshDuration = Date.now() - refreshStartTime;
-        logger.info('[DBPoolManager] CREDENTIAL REFRESH COMPLETED');
+        logger.info('[DBPoolManager] CREDENTIAL REFRESH COMPLETED', {
+          refreshDurationMs: refreshDuration,
+        });
       } else {
         logger.info('[DBPoolManager] Credentials unchanged - pool error may be transient');
       }
     } catch (error) {
       const refreshDuration = Date.now() - refreshStartTime;
-      logger.error('[DBPoolManager] CREDENTIAL REFRESH FAILED', { error });
+      logger.error('[DBPoolManager] CREDENTIAL REFRESH FAILED', {
+        error,
+        refreshDurationMs: refreshDuration,
+      });
       throw error;
     } finally {
       this.isRefreshing = false;
@@ -230,22 +229,35 @@ class DatabasePoolManager {
     const region = process.env.AWS_REGION || 'eu-west-2';
     const client = new SecretsManagerClient({ region });
 
-    logger.info('[DBPoolManager] Calling Secrets Manager');
+    logger.info('[DBPoolManager] Calling Secrets Manager', { secretArn });
 
     const command = new GetSecretValueCommand({ SecretId: secretArn });
     const response = await client.send(command);
 
-    if (!response.SecretString) {
-      throw new Error('Secret has no SecretString');
+    let secretString: string;
+    
+    // Support both SecretString and SecretBinary
+    if (response.SecretString) {
+      secretString = response.SecretString;
+    } else if (response.SecretBinary) {
+      // Decode binary secret to string
+      const buffer = Buffer.from(response.SecretBinary);
+      secretString = buffer.toString('utf-8');
+    } else {
+      throw new Error('Secret has neither SecretString nor SecretBinary');
     }
 
-    const parsed = JSON.parse(response.SecretString);
+    const parsed = JSON.parse(secretString);
     
     if (!parsed.username || !parsed.password) {
       throw new Error('Secret must contain username and password fields');
     }
 
-    logger.info('[DBPoolManager] Successfully fetched credentials from Secrets Manager');
+    logger.info('[DBPoolManager] Successfully fetched credentials from Secrets Manager', {
+      hasUsername: !!parsed.username,
+      hasPassword: !!parsed.password,
+      hasHost: !!parsed.host,
+    });
 
     return parsed;
   }
