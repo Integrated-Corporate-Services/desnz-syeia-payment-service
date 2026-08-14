@@ -175,7 +175,7 @@ class DatabasePoolManager {
     let secretArn = process.env.DB_CREDENTIALS_SECRET_ARN;
     if (!secretArn && process.env.DB_CREDENTIALS?.startsWith('arn:aws:secretsmanager:')) {
       secretArn = process.env.DB_CREDENTIALS;
-      logger.info('[DBPoolManager] Using DB_CREDENTIALS as secret ARN for refresh');
+      logger.info('[DBPoolManager]  Using DB_CREDENTIALS as secret ARN for refresh');
     }
     
     if (!secretArn) {
