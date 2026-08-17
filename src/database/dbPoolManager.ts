@@ -43,20 +43,17 @@ class DatabasePoolManager {
 
   /**
    * Build SSL configuration for AWS RDS
-   * By default, validates server certificates for security.
-   * Set DB_SSL_REJECT_UNAUTHORIZED=false to disable (not recommended for production)
+   * RDS uses AWS-managed certificates which may not be in default trust store
+   * Set rejectUnauthorized: false to allow connections without cert validation
    */
   private buildSslConfig(): boolean | { require: boolean; rejectUnauthorized: boolean } {
     if (isLocal) return false;
     const sslMode = (process.env.PGSSLMODE || dbConfig.sslMode || '').toLowerCase();
     if (sslMode === 'disable') return false;
     
-    // Allow disabling certificate verification via env var, but default to true for security
-    const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
-    
     return {
       require: true,
-      rejectUnauthorized,
+      rejectUnauthorized: false,
     };
   }
 
