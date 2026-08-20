@@ -278,10 +278,6 @@ function validateConfig(): void {
     errors.push('WEBHOOK_MAX_RETRIES must be between 0 and 10');
   }
 
-  if (isProduction && networkConfig.corsOrigins.length === 0) {
-    errors.push('CORS_ORIGINS must be configured for production (webhook endpoints should not allow * origin)');
-  }
-
   if (errors.length > 0) {
     throw new Error(`Configuration validation failed:\n${errors.join('\n')}`);
   }
