@@ -72,7 +72,7 @@ describe('WebhookSignatureValidation', () => {
           'pay-signature': 'test-signature-123',
         },
         body: {
-          webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+          webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         },
       };
 
@@ -80,7 +80,7 @@ describe('WebhookSignatureValidation', () => {
 
       expect(result).toEqual({
         signature: 'test-signature-123',
-        webhookId: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhookId: 's3h4s4qiq1k25p5cs2d6574thk',
       });
     });
 
@@ -90,7 +90,7 @@ describe('WebhookSignatureValidation', () => {
           'pay-signature': ['test-signature-123', 'extra'],
         },
         body: {
-          webhook_message_id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+          webhook_message_id: '7mrp1d5lsa5pdfs2bvim2f9cdu',
         },
       };
 
@@ -98,7 +98,7 @@ describe('WebhookSignatureValidation', () => {
 
       expect(result).toEqual({
         signature: 'test-signature-123',
-        webhookId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        webhookId: '7mrp1d5lsa5pdfs2bvim2f9cdu',
       });
     });
 
@@ -171,7 +171,7 @@ describe('WebhookSignatureValidation', () => {
   describe('parseWebhookEvent', () => {
     it('should parse valid GOV.UK Pay webhook event', () => {
       const rawBody = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -186,7 +186,7 @@ describe('WebhookSignatureValidation', () => {
       const result = parseWebhookEvent(rawBody);
 
       expect(result).toEqual({
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -227,7 +227,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should return null for missing event_type', () => {
       const rawBody = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         resource_id: 'pay_12345',
         resource_type: 'payment',
@@ -241,7 +241,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should return null for missing resource', () => {
       const rawBody = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         resource_id: 'pay_12345',
@@ -255,7 +255,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should default api_version to 1 if not provided', () => {
       const rawBody = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         event_type: 'card_payment_succeeded',
         resource_id: 'pay_12345',
         resource_type: 'payment',
@@ -269,7 +269,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle missing created_date with current timestamp', () => {
       const rawBody = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         resource_id: 'pay_12345',
@@ -287,7 +287,7 @@ describe('WebhookSignatureValidation', () => {
   describe('extractPaymentIdFromEvent', () => {
     it('should extract payment ID from resource_id', () => {
       const event = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -306,7 +306,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should fallback to resource.payment_id if resource_id not present', () => {
       const event = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -324,7 +324,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should return null if no payment ID found', () => {
       const event = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -340,7 +340,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle non-string resource.payment_id', () => {
       const event = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -362,7 +362,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should validate complete valid webhook', () => {
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -398,7 +398,7 @@ describe('WebhookSignatureValidation', () => {
       const req = {
         headers: {},
         body: {
-          webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+          webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         },
       };
 
@@ -410,7 +410,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should reject invalid signature', () => {
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         resource_id: 'pay_12345',
@@ -433,7 +433,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should reject invalid event structure', () => {
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
       };
       const bodyString = JSON.stringify(body);
       const signature = crypto
@@ -457,7 +457,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle missing resource_id by defaulting to unknown', () => {
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -488,7 +488,7 @@ describe('WebhookSignatureValidation', () => {
 
     it('should handle missing rawBody by reconstructing from body', () => {
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -527,7 +527,7 @@ describe('WebhookSignatureValidation', () => {
       process.env.GOVPAY_WEBHOOK_SIGNING_KEY = signingKey;
 
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         api_version: 1,
         event_type: 'card_payment_succeeded',
         created_date: '2024-01-15T10:30:00Z',
@@ -571,9 +571,9 @@ describe('WebhookSignatureValidation', () => {
           'pay-signature': 'invalid-signature',
         },
         body: {
-          webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+          webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
         },
-        rawBody: JSON.stringify({ webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851' }),
+        rawBody: JSON.stringify({ webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk' }),
       };
       const res: any = {
         status: jest.fn().mockReturnThis(),
@@ -636,7 +636,7 @@ describe('WebhookSignatureValidation', () => {
       process.env.GOVPAY_WEBHOOK_SIGNING_KEY = signingKey;
 
       const body = {
-        webhook_message_id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        webhook_message_id: 's3h4s4qiq1k25p5cs2d6574thk',
       };
       const bodyString = JSON.stringify(body);
       const signature = crypto

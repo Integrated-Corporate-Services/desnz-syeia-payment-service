@@ -9,6 +9,9 @@
  */
 export const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** GOV.UK Pay webhook_message_id: 26 lowercase alphanumeric characters */
+export const GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX = /^[a-z0-9]{26}$/;
+
 /**
  * Webhook Processing Status Values
  * Maps to database 'status' column
