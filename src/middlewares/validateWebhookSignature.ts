@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ERROR_MESSAGES, ERROR_CATEGORIES } from '../constants';
-import { UUID_V4_REGEX } from '../constants/webhook.constants';
+import { GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX } from '../constants/webhook.constants';
 import { verifyHmacSignature } from '../utils/cryptoUtils';
 import getLogger from '../utils/loggerHelper';
 
@@ -45,10 +45,8 @@ export function extractWebhookHeaders(req: WebhookRequest): {
   // webhook_message_id comes from body, not headers
   const webhookId = req.body?.webhook_message_id || null;
   
-  // Security: Validate webhook_message_id is a valid UUID v4
-  // Prevents injection attacks and ensures data integrity
+  // Security: Validate webhook_message_id matches GOV.UK Pay format (26 lowercase alphanumeric chars)
   if (webhookId !== null) {
-    // Must be a string
     if (typeof webhookId !== 'string') {
       logger.warn('[Webhook] Invalid webhook_message_id type - must be string', {
         webhook_id_type: typeof webhookId,
@@ -56,10 +54,9 @@ export function extractWebhookHeaders(req: WebhookRequest): {
       });
       return { signature, webhookId: null };
     }
-    
-    // Must match UUID v4 format
-    if (!UUID_V4_REGEX.test(webhookId)) {
-      logger.warn('[Webhook] Invalid webhook_message_id format - not a valid UUID v4', {
+
+    if (!GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX.test(webhookId)) {
+      logger.warn('[Webhook] Invalid webhook_message_id format', {
         webhook_id_received: webhookId,
         error_category: ERROR_CATEGORIES.VALIDATION,
       });
@@ -168,8 +165,19 @@ export function validateWebhookSignature(
 ): { valid: boolean; error?: string; event?: WebhookEvent; paymentId?: string } {
   const { signature, webhookId } = extractWebhookHeaders(req);
 
-  if (!signature || !webhookId) {
+  if (!signature) {
     return { valid: false, error: ERROR_MESSAGES.INVALID_SIGNATURE };
+  }
+
+  if (!webhookId) {
+    const hasWebhookMessageId = typeof req.body?.webhook_message_id === 'string'
+      && req.body.webhook_message_id.length > 0;
+    return {
+      valid: false,
+      error: hasWebhookMessageId
+        ? ERROR_MESSAGES.INVALID_WEBHOOK_ID
+        : ERROR_MESSAGES.INVALID_SIGNATURE,
+    };
   }
 
   // Get raw body - use captured rawBody if available, otherwise reconstruct from parsed body

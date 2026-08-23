@@ -257,7 +257,7 @@ export const PAYMENT_CANCELLED_WEBHOOK: WebhookPayload = {
  * Payment Expired Event - sandbox sends uppercase resource_type and timedout status
  */
 export const PAYMENT_EXPIRED_WEBHOOK: WebhookPayload = {
-  webhook_message_id: 'vin6vdab2n08h2ttfeepetglh',
+  webhook_message_id: 'il080p09reme1pbq9ek0te92k3',
   api_version: 1,
   event_type: 'card_payment_expired',
   created_date: '2026-06-12T10:03:58.239Z',
