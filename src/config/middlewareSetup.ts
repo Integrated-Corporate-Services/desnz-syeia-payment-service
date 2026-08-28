@@ -12,7 +12,9 @@ interface RequestWithRawBody extends Request {
 }
 
 export function registerMiddleware(app: Express): void {
-  app.set('trust proxy', true);
+  // Trust only the first proxy (ALB) - prevents IP spoofing while enabling rate limiting
+  // See: https://express-rate-limit.github.io/ERR_ERL_PERMISSIVE_TRUST_PROXY/
+  app.set('trust proxy', 1);
 
   app.use(requestContextMiddleware);
   app.use(corsMiddleware);
