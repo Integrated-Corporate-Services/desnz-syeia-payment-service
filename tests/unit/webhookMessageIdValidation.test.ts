@@ -1,30 +1,30 @@
 /**
  * Unit Tests for Webhook Message ID Validation
- * Tests security vulnerability fixes for HIGH-005: Missing UUID Validation
+ * GOV.UK Pay sends webhook_message_id as 26 lowercase alphanumeric characters.
  */
 
 import { extractWebhookHeaders } from '../../src/middlewares/validateWebhookSignature';
-import { UUID_V4_REGEX } from '../../src/constants/webhook.constants';
+import { GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX } from '../../src/constants/webhook.constants';
 
-describe('Webhook Message ID Validation - HIGH-005', () => {
-  describe('extractWebhookHeaders - UUID Validation', () => {
-    it('should accept valid UUID v4 webhook_message_id', () => {
-      const validUUIDs = [
-        '550e8400-e29b-41d4-a716-446655440000',
-        'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-        '7c9e6679-7425-40de-944b-e07fc1f90ae7',
-        'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', // lowercase hex UUID v4
-      ];
+const VALID_GOVUK_PAY_IDS = [
+  's3h4s4qiq1k25p5cs2d6574thk',
+  '7mrp1d5lsa5pdfs2bvim2f9cdu',
+  'qiqgg6pd8ps9runhjfg6adgf5m',
+  'il080p09reme1pbq9ek0te92k3',
+];
 
-      validUUIDs.forEach(uuid => {
+describe('Webhook Message ID Validation', () => {
+  describe('extractWebhookHeaders - GOV.UK Pay format validation', () => {
+    it('should accept valid GOV.UK Pay webhook_message_id values', () => {
+      VALID_GOVUK_PAY_IDS.forEach((id) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
-          body: { webhook_message_id: uuid },
+          body: { webhook_message_id: id },
         };
 
         const result = extractWebhookHeaders(req);
-        
-        expect(result.webhookId).toBe(uuid);
+
+        expect(result.webhookId).toBe(id);
         expect(result.signature).toBe('test-signature');
       });
     });
@@ -38,14 +38,14 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         "1; DELETE FROM payments WHERE 1=1; --",
       ];
 
-      sqlInjectionPayloads.forEach(payload => {
+      sqlInjectionPayloads.forEach((payload) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: payload },
         };
 
         const result = extractWebhookHeaders(req);
-        
+
         expect(result.webhookId).toBeNull();
         expect(result.signature).toBe('test-signature');
       });
@@ -59,14 +59,14 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         '<svg/onload=alert(1)>',
       ];
 
-      xssPayloads.forEach(payload => {
+      xssPayloads.forEach((payload) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: payload },
         };
 
         const result = extractWebhookHeaders(req);
-        
+
         expect(result.webhookId).toBeNull();
       });
     });
@@ -78,57 +78,41 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         '..\\..\\..\\windows\\system32',
       ];
 
-      pathTraversalPayloads.forEach(payload => {
+      pathTraversalPayloads.forEach((payload) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: payload },
         };
 
         const result = extractWebhookHeaders(req);
-        
+
         expect(result.webhookId).toBeNull();
       });
     });
 
-    it('should reject non-UUID strings', () => {
+    it('should reject non-conforming strings', () => {
       const invalidFormats = [
-        'not-a-uuid',
+        'not-a-valid-id',
         '12345678',
-        'abcd-efgh-ijkl-mnop',
+        '550e8400-e29b-41d4-a716-446655440000', // UUID v4 (wrong format for GOV.UK Pay)
         'random_string_123',
         '',
         ' ',
         'null',
         'undefined',
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZ', // uppercase
+        'abc123', // too short
+        'abcdefghijklmnopqrstuvwxyz1234567890', // too long
       ];
 
-      invalidFormats.forEach(invalid => {
+      invalidFormats.forEach((invalid) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: invalid },
         };
 
         const result = extractWebhookHeaders(req);
-        
-        expect(result.webhookId).toBeNull();
-      });
-    });
 
-    it('should reject UUID v1/v3/v5 (only v4 is valid)', () => {
-      const nonV4UUIDs = [
-        'a0eebc99-9c0b-1ef8-bb6d-6bb9bd380a11', // UUID v1
-        'a0eebc99-9c0b-3ef8-bb6d-6bb9bd380a11', // UUID v3
-        'a0eebc99-9c0b-5ef8-bb6d-6bb9bd380a11', // UUID v5
-      ];
-
-      nonV4UUIDs.forEach(uuid => {
-        const req = {
-          headers: { 'pay-signature': 'test-signature' },
-          body: { webhook_message_id: uuid },
-        };
-
-        const result = extractWebhookHeaders(req);
-        
         expect(result.webhookId).toBeNull();
       });
     });
@@ -140,7 +124,7 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
       };
 
       const result = extractWebhookHeaders(req);
-      
+
       expect(result.webhookId).toBeNull();
       expect(result.signature).toBe('test-signature');
     });
@@ -151,177 +135,105 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         { webhook_message_id: undefined },
       ];
 
-      testCases.forEach(body => {
+      testCases.forEach((body) => {
         const req: any = {
           headers: { 'pay-signature': 'test-signature' },
           body,
         };
 
         const result = extractWebhookHeaders(req);
-        
+
         expect(result.webhookId).toBeNull();
       });
     });
 
     it('should handle non-string webhook_message_id types', () => {
-      const nonStringTypes: any[] = [
-        12345,
-        true,
-        false,
-        [],
-        {},
-        () => {},
-      ];
+      const nonStringTypes: any[] = [12345, true, false, [], {}, () => {}];
 
-      nonStringTypes.forEach(value => {
+      nonStringTypes.forEach((value) => {
         const req: any = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: value },
         };
 
         const result = extractWebhookHeaders(req);
-        
+
         expect(result.webhookId).toBeNull();
       });
     });
 
-    it('should be case-insensitive for UUID validation', () => {
-      const mixedCaseUUIDs = [
-        '550E8400-E29B-41D4-A716-446655440000',
-        'F47AC10B-58CC-4372-A567-0E02B2C3D479',
-        '7C9E6679-7425-40DE-944B-E07FC1F90AE7',
+    it('should reject IDs with extra characters or whitespace', () => {
+      const malformedIds = [
+        'xs3h4s4qiq1k25p5cs2d6574thk',
+        's3h4s4qiq1k25p5cs2d6574thkx',
+        ' s3h4s4qiq1k25p5cs2d6574thk',
+        's3h4s4qiq1k25p5cs2d6574thk ',
+        's3h4s4qiq1k25p5cs2d6574thk\n',
+        's3h4s4qiq1k25p5cs2d6574thk;',
       ];
 
-      mixedCaseUUIDs.forEach(uuid => {
+      malformedIds.forEach((id) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
-          body: { webhook_message_id: uuid },
+          body: { webhook_message_id: id },
         };
 
         const result = extractWebhookHeaders(req);
-        
-        expect(result.webhookId).toBe(uuid);
-      });
-    });
 
-    it('should reject UUIDs with extra characters', () => {
-      const malformedUUIDs = [
-        'x550e8400-e29b-41d4-a716-446655440000',
-        '550e8400-e29b-41d4-a716-446655440000x',
-        ' 550e8400-e29b-41d4-a716-446655440000',
-        '550e8400-e29b-41d4-a716-446655440000 ',
-        '550e8400-e29b-41d4-a716-446655440000\n',
-        '550e8400-e29b-41d4-a716-446655440000;',
-      ];
-
-      malformedUUIDs.forEach(uuid => {
-        const req = {
-          headers: { 'pay-signature': 'test-signature' },
-          body: { webhook_message_id: uuid },
-        };
-
-        const result = extractWebhookHeaders(req);
-        
-        expect(result.webhookId).toBeNull();
-      });
-    });
-
-    it('should reject UUIDs with wrong dash positions', () => {
-      const wrongDashPositions = [
-        '550e8400e29b-41d4-a716-446655440000',
-        '550e8400-e29b41d4-a716-446655440000',
-        '550e8400-e29b-41d4a716-446655440000',
-        '550e8400-e29b-41d4-a716446655440000',
-      ];
-
-      wrongDashPositions.forEach(uuid => {
-        const req = {
-          headers: { 'pay-signature': 'test-signature' },
-          body: { webhook_message_id: uuid },
-        };
-
-        const result = extractWebhookHeaders(req);
-        
         expect(result.webhookId).toBeNull();
       });
     });
   });
 
-  describe('UUID_V4_REGEX constant validation', () => {
-    it('should match valid UUID v4 format', () => {
-      const validUUIDs = [
+  describe('GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX constant validation', () => {
+    it('should match valid GOV.UK Pay webhook_message_id format', () => {
+      VALID_GOVUK_PAY_IDS.forEach((id) => {
+        expect(GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX.test(id)).toBe(true);
+      });
+    });
+
+    it('should reject invalid formats', () => {
+      const invalidIds = [
+        'not-a-valid-id',
         '550e8400-e29b-41d4-a716-446655440000',
-        'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-      ];
-
-      validUUIDs.forEach(uuid => {
-        expect(UUID_V4_REGEX.test(uuid)).toBe(true);
-      });
-    });
-
-    it('should reject invalid UUID formats', () => {
-      const invalidUUIDs = [
-        'not-a-uuid',
-        '550e8400-e29b-51d4-a716-446655440000', // wrong version (5)
-        '550e8400-e29b-41d4-e716-446655440000', // wrong variant
+        'UPPERCASEONLYABCDEFGHIJKLMN',
         '',
+        'abc',
       ];
 
-      invalidUUIDs.forEach(uuid => {
-        expect(UUID_V4_REGEX.test(uuid)).toBe(false);
-      });
-    });
-
-    it('should require callers to guard non-string UUID inputs before regex validation', () => {
-      const nonStringUUIDs = [null, undefined];
-
-      nonStringUUIDs.forEach(uuid => {
-        expect(typeof uuid === 'string').toBe(false);
+      invalidIds.forEach((id) => {
+        expect(GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX.test(id)).toBe(false);
       });
     });
   });
 
   describe('Security Compliance', () => {
-    it('should prevent OWASP A03:2021 - Injection attacks', () => {
+    it('should prevent injection attacks in webhook_message_id', () => {
       const injectionPayloads = [
         "'; DROP TABLE payments; --",
         "1' UNION SELECT * FROM users--",
         "<script>alert('xss')</script>",
       ];
 
-      injectionPayloads.forEach(payload => {
+      injectionPayloads.forEach((payload) => {
         const req = {
           headers: { 'pay-signature': 'test-signature' },
           body: { webhook_message_id: payload },
         };
 
         const result = extractWebhookHeaders(req);
-        
-        // Should reject all injection attempts
+
         expect(result.webhookId).toBeNull();
       });
     });
 
-    it('should enforce CWE-20: Proper Input Validation', () => {
-      const req = {
-        headers: { 'pay-signature': 'test-signature' },
-        body: { webhook_message_id: 'invalid-format' },
-      };
-
-      const result = extractWebhookHeaders(req);
-      
-      // Input validation should reject non-conforming inputs
-      expect(result.webhookId).toBeNull();
-    });
-
-    it('should comply with OWASP API Security - API8:2023 Security Misconfiguration', () => {
-      // Valid configuration should only accept UUID v4
-      const validUUID = '550e8400-e29b-41d4-a716-446655440000';
+    it('should accept only GOV.UK Pay conforming webhook_message_id values', () => {
+      const validId = 's3h4s4qiq1k25p5cs2d6574thk';
       const invalidInput = 'any-string-value';
 
       const validReq = {
         headers: { 'pay-signature': 'sig' },
-        body: { webhook_message_id: validUUID },
+        body: { webhook_message_id: validId },
       };
 
       const invalidReq = {
@@ -329,7 +241,7 @@ describe('Webhook Message ID Validation - HIGH-005', () => {
         body: { webhook_message_id: invalidInput },
       };
 
-      expect(extractWebhookHeaders(validReq).webhookId).toBe(validUUID);
+      expect(extractWebhookHeaders(validReq).webhookId).toBe(validId);
       expect(extractWebhookHeaders(invalidReq).webhookId).toBeNull();
     });
   });
