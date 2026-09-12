@@ -27,7 +27,22 @@ export async function processBACSWebhook(
   correlationId: string
 ): Promise<BACSWebhookProcessingResult> {
   const startTime = Date.now();
+  logger.start('BACSWebhookService', 'processBACSWebhook', { webhookId, paymentId, correlationId });
+  try {
+    return await processBACSWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
+  } finally {
+    logger.end('BACSWebhookService', 'processBACSWebhook', { webhookId, paymentId, correlationId });
+  }
+}
 
+async function processBACSWebhookInternal(
+  webhookId: string,
+  paymentId: string,
+  event: BACSWebhookPayload,
+  rawPayload: string,
+  correlationId: string,
+  startTime: number
+): Promise<BACSWebhookProcessingResult> {
   logger.info('[BACSWebhookService] Processing BACS webhook', {
     webhookId,
     paymentId,

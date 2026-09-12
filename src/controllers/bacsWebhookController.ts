@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import getLogger from '../utils/loggerHelper';
+import { getRequestContext } from '../middlewares/requestContext';
 import { processBACSWebhook } from '../services/bacsPaymentWebhookService';
 import { checkDatabaseConnectivity } from '../database/db';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
@@ -8,7 +9,6 @@ import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 import { serializeWebhookPayload } from '../utils/webhookUtils';
 import { createSanitizedErrorLog } from '../utils/errorSanitizer';
 import {
-  HEADER_CORRELATION_ID,
   OUTCOME_SUCCESS,
   OUTCOME_DUPLICATE,
   OUTCOME_ERROR_VALIDATION,
@@ -41,7 +41,28 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
   
   const eventId = webhookEvent?.event?.eventId || uuidv4();
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
-  const correlationId = (req.headers[HEADER_CORRELATION_ID] as string) || uuidv4();
+  const correlationId = getRequestContext()?.correlation_id;
+
+  logger.start('BACSWebhook', 'handleBACSWebhook', { eventId, deliveryId, correlationId });
+  try {
+    return await handleBACSWebhookInternal(req, res, { webhookEvent, paymentId, eventId, deliveryId, correlationId });
+  } finally {
+    logger.end('BACSWebhook', 'handleBACSWebhook', { eventId, deliveryId, correlationId });
+  }
+}
+
+async function handleBACSWebhookInternal(
+  req: BACSWebhookRequest,
+  res: Response,
+  ctx: {
+    webhookEvent?: BACSWebhookPayload;
+    paymentId?: string;
+    eventId: string;
+    deliveryId: string;
+    correlationId: string | undefined;
+  }
+): Promise<Response> {
+  const { webhookEvent, paymentId, eventId, deliveryId, correlationId } = ctx;
 
   if (!webhookEvent) {
     logger.error('[BACSWebhook] Invalid event structure', {
@@ -177,6 +198,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
 }
 
 async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> {
+  logger.start('BACSHealth', 'BACSHealthCheck');
   const health = {
     status: 'healthy' as 'healthy' | 'unhealthy',
     service: 'bacs-webhook-receiver',
@@ -205,6 +227,8 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
     };
     logger.error('[BACSHealth] Check failed', { error: error instanceof Error ? error.message : String(error) });
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+  } finally {
+    logger.end('BACSHealth', 'BACSHealthCheck', { status: health.status });
   }
 
   logger.debug('[BACSHealth] Health check passed', { health });

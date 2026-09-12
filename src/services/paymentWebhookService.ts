@@ -39,7 +39,22 @@ export async function processWebhook(
   correlationId: string
 ): Promise<WebhookProcessingResult> {
   const startTime = Date.now();
+  logger.start('WebhookService', 'processWebhook', { webhookId, paymentId, correlationId });
+  try {
+    return await processWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
+  } finally {
+    logger.end('WebhookService', 'processWebhook', { webhookId, paymentId, correlationId });
+  }
+}
 
+async function processWebhookInternal(
+  webhookId: string,
+  paymentId: string,
+  event: any,
+  rawPayload: any,
+  correlationId: string,
+  startTime: number
+): Promise<WebhookProcessingResult> {
   logger.info('[WebhookService] Processing webhook', {
     webhookId,
     paymentId,
