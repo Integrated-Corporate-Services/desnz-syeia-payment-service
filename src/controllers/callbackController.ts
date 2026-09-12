@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import getLogger from '../utils/loggerHelper';
+import { getRequestContext } from '../middlewares/requestContext';
 import { processWebhook } from '../services/paymentWebhookService';
 import { HTTP_STATUS } from '../constants/error.constants';
 import { checkDatabaseConnectivity } from '../database/db';
@@ -58,19 +59,6 @@ function isValidWebhookEvent(event: unknown): event is WebhookEvent {
 }
 
 /**
- * Validates and sanitizes correlation ID
- */
-function getValidCorrelationId(headerValue: unknown): string {
-  if (typeof headerValue === 'string' && headerValue.length > 0 && headerValue.length <= 128) {
-    const sanitized = headerValue.trim();
-    if (uuidValidate(sanitized)) {
-      return sanitized;
-    }
-  }
-  return uuidv4();
-}
-
-/**
  * Safely serializes request body to string
  */
 function serializePayload(body: unknown): string {
@@ -103,7 +91,22 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
   const webhookEvent = req.webhookEvent;
   const paymentId = req.paymentId;
   const webhookId: string = (webhookEvent?.webhook_message_id as string) || uuidv4();
-  const correlationId = getValidCorrelationId(req.headers['x-correlation-id']);
+  const correlationId = getRequestContext()?.correlation_id || uuidv4();
+
+  logger.start('WebhookController', 'handleWebhook', { webhookId, correlationId });
+  try {
+    return await handleWebhookInternal(req, res, { webhookEvent, paymentId, webhookId, correlationId });
+  } finally {
+    logger.end('WebhookController', 'handleWebhook', { webhookId, correlationId });
+  }
+}
+
+async function handleWebhookInternal(
+  req: WebhookRequest,
+  res: Response,
+  ctx: { webhookEvent?: WebhookEvent; paymentId?: string; webhookId: string; correlationId: string }
+): Promise<Response> {
+  const { webhookEvent, paymentId, webhookId, correlationId } = ctx;
 
   // Validate required webhook event structure
   if (!isValidWebhookEvent(webhookEvent)) {
@@ -245,7 +248,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
  * Returns 200 if all checks pass, 503 if any check fails
  */
 async function healthCheck(_req: Request, res: Response): Promise<Response> {
-  
+  logger.start('Health', 'healthCheck');
   const health: any = {
     status: 'healthy',
     service: 'payment-webhook-receiver',
@@ -278,6 +281,8 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
     };
     logger.error('[Health] Database check failed', { error: error instanceof Error ? error.message : String(error) });
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
+  } finally {
+    logger.end('Health', 'healthCheck', { status: health.status });
   }
 
   return res.status(HTTP_STATUS.OK).json(health);

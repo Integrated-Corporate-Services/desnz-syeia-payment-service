@@ -3,7 +3,6 @@ import express from 'express';
 import { corsMiddleware } from './corsConfig';
 import { globalRateLimiter } from './rateLimiting';
 import { securityHeadersMiddleware } from '../middlewares/securityHeaders';
-import { requestLoggerMiddleware } from '../middlewares/requestLogger';
 import { requestContextMiddleware } from '../middlewares/requestContext';
 import { httpLoggingMiddleware } from '../middlewares/httpLogging';
 
@@ -31,5 +30,4 @@ export function registerMiddleware(app: Express): void {
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
   app.use(httpLoggingMiddleware);
-  app.use(requestLoggerMiddleware);
 }

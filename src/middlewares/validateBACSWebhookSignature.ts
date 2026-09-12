@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import getLogger from '../utils/loggerHelper';
+import { getRequestContext } from './requestContext';
 import { computeHmacSignature, constantTimeSignatureCompare } from '../utils/cryptoUtils';
 import { HTTP_STATUS, ERROR_CODES, ERROR_CATEGORIES } from '../constants/error.constants';
 import { CRYPTO_CONFIG } from '../constants/config.constants';
@@ -12,7 +13,6 @@ import {
   HEADER_WEBHOOK_SIGNATURE,
   HEADER_SIGNATURE_VERSION,
   HEADER_REQUEST_TIMESTAMP,
-  HEADER_CORRELATION_ID,
   ERROR_EMPTY_BODY,
   ERROR_MISSING_SIGNATURE,
   ERROR_INVALID_SIGNATURE_FORMAT,
@@ -22,7 +22,6 @@ import {
   ERROR_INVALID_TIMESTAMP_FORMAT,
   ERROR_TIMESTAMP_EXPIRED,
   ERROR_INTERNAL,
-  DEFAULT_CORRELATION_ID,
   ERROR_CATEGORY_AUTHENTICATION,
   ERROR_CATEGORY_VALIDATION,
   ERROR_CATEGORY_INTERNAL,
@@ -66,8 +65,22 @@ export function validateBACSWebhookSignatureMiddleware(
   res: Response,
   next: NextFunction
 ): Response | void {
-  const correlationId = req.headers[HEADER_CORRELATION_ID] || DEFAULT_CORRELATION_ID;
+  const correlationId = getRequestContext()?.correlation_id;
 
+  logger.start('BACSWebhook', 'validateBACSWebhookSignatureMiddleware', { correlationId });
+  try {
+    return validateBACSWebhookSignatureInternal(req, res, next, correlationId);
+  } finally {
+    logger.end('BACSWebhook', 'validateBACSWebhookSignatureMiddleware', { correlationId });
+  }
+}
+
+function validateBACSWebhookSignatureInternal(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  correlationId: string | undefined
+): Response | void {
   const signatureHeader = req.headers[HEADER_WEBHOOK_SIGNATURE];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
   
