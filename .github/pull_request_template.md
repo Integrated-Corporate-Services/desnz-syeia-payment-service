@@ -21,9 +21,6 @@
 2. 
 3. 
 
-## Screenshots/Recording
-<!-- If UI changes, add visuals -->
-
 ## Checklist
 - [ ] Commits: `SYEIA-#### message`
 - [ ] Tests added/passing
