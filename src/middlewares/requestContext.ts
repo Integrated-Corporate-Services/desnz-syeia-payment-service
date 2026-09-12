@@ -37,7 +37,10 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
     // Every logger call (via loggerHelper) picks this up automatically, and every
     // downstream middleware/controller should read it via getRequestContext() rather
     // than re-deriving its own id from headers.
-    correlation_id: (req.headers['x-correlation-id'] as string) || requestId,
+    correlation_id:
+      typeof req.headers['x-correlation-id'] === 'string' && req.headers['x-correlation-id']
+        ? req.headers['x-correlation-id']
+        : requestId,
     start_time: Date.now(),
   };
 
