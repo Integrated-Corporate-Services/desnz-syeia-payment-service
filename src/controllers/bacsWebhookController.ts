@@ -41,7 +41,7 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
   
   const eventId = webhookEvent?.event?.eventId || uuidv4();
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
-  const correlationId = getRequestContext()?.correlation_id;
+  const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
   logger.start('BACSWebhook', 'handleBACSWebhook', { eventId, deliveryId, correlationId });
   try {
@@ -59,7 +59,7 @@ async function handleBACSWebhookInternal(
     paymentId?: string;
     eventId: string;
     deliveryId: string;
-    correlationId: string | undefined;
+    correlationId: string;
   }
 ): Promise<Response> {
   const { webhookEvent, paymentId, eventId, deliveryId, correlationId } = ctx;

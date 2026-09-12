@@ -91,7 +91,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
   const webhookEvent = req.webhookEvent;
   const paymentId = req.paymentId;
   const webhookId: string = (webhookEvent?.webhook_message_id as string) || uuidv4();
-  const correlationId = getRequestContext()?.correlation_id;
+  const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
   logger.start('WebhookController', 'handleWebhook', { webhookId, correlationId });
   try {
@@ -104,7 +104,7 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
 async function handleWebhookInternal(
   req: WebhookRequest,
   res: Response,
-  ctx: { webhookEvent?: WebhookEvent; paymentId?: string; webhookId: string; correlationId: string | undefined }
+  ctx: { webhookEvent?: WebhookEvent; paymentId?: string; webhookId: string; correlationId: string }
 ): Promise<Response> {
   const { webhookEvent, paymentId, webhookId, correlationId } = ctx;
 
