@@ -85,11 +85,8 @@ describe('extractPaymentIdFromEvent', () => {
     const result = extractPaymentIdFromEvent(event);
 
     expect(result).toBeNull();
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      '[Webhook] Unable to extract payment ID from event',
-      expect.objectContaining({
-        webhookMessageId: 'evt_test_12345',
-      })
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('[GOVPAY][SIGNATURE][FAILED][validateWebhookSignature.ts][extractPaymentIdFromEvent] error=unable_to_extract_payment_id webhookMessageId=evt_test_12345')
     );
   });
 

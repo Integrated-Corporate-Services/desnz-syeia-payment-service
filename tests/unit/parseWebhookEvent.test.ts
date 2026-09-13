@@ -70,7 +70,9 @@ describe('parseWebhookEvent', () => {
     const result = parseWebhookEvent(null as any);
 
     expect(result).toBeNull();
-    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Invalid webhook body structure');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('[GOVPAY][SIGNATURE][FAILED][validateWebhookSignature.ts][parseWebhookEvent] error=invalid_webhook_body_structure')
+    );
   });
 
   it('should return null for non-object body', () => {
@@ -91,11 +93,8 @@ describe('parseWebhookEvent', () => {
     const result = parseWebhookEvent(rawBody);
 
     expect(result).toBeNull();
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      '[Webhook] Webhook missing required fields',
-      expect.objectContaining({
-        hasWebhookMessageId: false,
-      })
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('[GOVPAY][SIGNATURE][FAILED][validateWebhookSignature.ts][parseWebhookEvent] error=webhook_missing_required_fields hasWebhookMessageId=false')
     );
   });
 
