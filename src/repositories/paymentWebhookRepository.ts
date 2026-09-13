@@ -61,7 +61,7 @@ interface WebhookCreateResult {
 export async function createWebhook(data: WebhookData): Promise<WebhookCreateResult> {
   return withTransaction(async (client: PoolClient) => {
     const start = Date.now();
-    logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
+    logger.info(`[BACS][WEBHOOK][DATABASE][SAVING_WEBHOOK_RECORD][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
     try {
       const result = await client.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
         data.webhook_id,
@@ -77,22 +77,22 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
       const isDuplicate = row?.is_duplicate || false;
 
       if (isDuplicate) {
-        logger.info(`[WEBHOOK][DATABASE][WEBHOOK_DUPLICATE_DETECTED][${FILE}][createWebhook] no row inserted (ON CONFLICT) - webhookId=${data.webhook_id} paymentId=${data.payment_id} existingStatus=${row?.status} correlationId=${data.correlation_id}`);
-        logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+        logger.info(`[BACS][WEBHOOK][DATABASE][WEBHOOK_DUPLICATE_DETECTED][${FILE}][createWebhook] no row inserted (ON CONFLICT) - webhookId=${data.webhook_id} paymentId=${data.payment_id} existingStatus=${row?.status} correlationId=${data.correlation_id}`);
+        logger.info(`[BACS][WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
         return {
           isDuplicate: true,
           status: row?.status,
         };
       }
 
-      logger.info(`[WEBHOOK][DATABASE][WEBHOOK_RECORD_INSERTED][${FILE}][createWebhook] webhook record inserted - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
-      logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+      logger.info(`[BACS][WEBHOOK][DATABASE][WEBHOOK_RECORD_SAVED][${FILE}][createWebhook] webhook record inserted - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
+      logger.info(`[BACS][WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
 
       return {
         isDuplicate: false,
       };
     } catch (error) {
-      logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][createWebhook] error=${error instanceof Error ? error.message : String(error)} - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+      logger.error(`[WEBHOOK][DATABASE][WEBHOOK_RECORD_SAVING_FAILED][${FILE}][createWebhook] error=${error instanceof Error ? error.message : String(error)} - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
       throw error;
     }
   });
