@@ -10,6 +10,8 @@ import config from '../config/config';
 const logger = getLogger(module);
 const { ERROR_CODES } = require('../constants');
 
+const FILE = 'paymentWebhookService.ts';
+
 interface WebhookProcessingResult {
   success: boolean;
   isDuplicate: boolean;
@@ -23,7 +25,7 @@ interface WebhookProcessingResult {
  * 1. Store webhook in database with status='pending' and enqueued_at=NULL
  * 2. Return immediately (no SQS interaction)
  * 3. pay-callback-relay will poll and send to SQS
- * 
+ *
  * @param webhookId - Unique webhook identifier from GOV.UK Pay
  * @param paymentId - Application/payment reference ID
  * @param event - Webhook event object
@@ -39,11 +41,11 @@ export async function processWebhook(
   correlationId: string
 ): Promise<WebhookProcessingResult> {
   const startTime = Date.now();
-  logger.start('WebhookService', 'processWebhook', { webhookId, paymentId, correlationId });
+  logger.info(`[GOVPAY][WEBHOOK][STARTED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
   try {
     return await processWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
   } finally {
-    logger.end('WebhookService', 'processWebhook', { webhookId, paymentId, correlationId });
+    logger.info(`[GOVPAY][WEBHOOK][ENDED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
   }
 }
 
@@ -55,18 +57,10 @@ async function processWebhookInternal(
   correlationId: string,
   startTime: number
 ): Promise<WebhookProcessingResult> {
-  logger.info('[WebhookService] Processing webhook', {
-    webhookId,
-    paymentId,
-    eventType: event.event_type || 'unknown',
-    correlationId,
-  });
+  logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_RECEIVED][${FILE}][processWebhookInternal] processing webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type || 'unknown'} correlationId=${correlationId}`);
 
   if (!config.features.callbackServiceEnabled) {
-    logger.warn('[WebhookService] Callback service is disabled', {
-      webhookId,
-      correlationId,
-    });
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][processWebhookInternal] error=callback_service_disabled - webhookId=${webhookId} correlationId=${correlationId}`);
     return {
       success: false,
       isDuplicate: false,
@@ -91,12 +85,7 @@ async function processWebhookInternal(
 
     // Check if this was a duplicate (returned by ON CONFLICT)
     if (createResult && createResult.isDuplicate) {
-      logger.info('[WebhookService] Duplicate webhook detected', {
-        webhookId,
-        paymentId,
-        previousStatus: createResult.status,
-        correlationId,
-      });
+      logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processWebhookInternal] duplicate webhook detected - webhookId=${webhookId} paymentId=${paymentId} previousStatus=${createResult.status} correlationId=${correlationId}`);
 
       return {
         success: true,
@@ -106,14 +95,7 @@ async function processWebhookInternal(
     }
 
     const duration = Date.now() - startTime;
-    logger.info('[WebhookService] Webhook stored successfully', {
-      webhookId,
-      paymentId,
-      eventType: event.event_type,
-      duration,
-      correlationId,
-      note: 'Webhook will be polled by pay-callback-relay',
-    });
+    logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_STORED][${FILE}][processWebhookInternal] webhook stored successfully - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type} durationMs=${duration} correlationId=${correlationId}`);
 
     return {
       success: true,
@@ -124,14 +106,7 @@ async function processWebhookInternal(
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
-    logger.error('[WebhookService] Error storing webhook', {
-      webhookId,
-      paymentId,
-      error: errorMessage,
-      code: error.code,
-      duration,
-      correlationId,
-    });
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][processWebhookInternal] error=${errorMessage} code=${error.code} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${duration}`);
 
     return {
       success: false,

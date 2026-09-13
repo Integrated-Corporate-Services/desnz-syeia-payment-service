@@ -1,16 +1,19 @@
 /**
  * Payment Webhook Repository
- * 
+ *
  * Data access layer for webhook event tracking and processing history.
  * Manages the payment_webhooks table which stores all incoming webhook events,
  * their processing status, retry attempts, and error handling.
- * 
+ *
  * This repository handles:
  * - Creating new webhook records when events are received
  * - Tracking webhook processing status (pending, processed, failed, retrying)
  * - Managing retry logic for transient failures
  * - Moving permanently failed webhooks to dead-letter queue
- * 
+ *
+ * Shared by both the GOVPAY and BACS domains (identical calls from each,
+ * no domain-specific fields) - tagged WEBHOOK rather than a false parent domain.
+ *
  * @module repositories/paymentWebhookRepository
  */
 
@@ -21,6 +24,8 @@ import getLogger from '../utils/loggerHelper';
 import { WEBHOOK_QUERIES } from '../constants/sql.constants';
 
 const logger = getLogger(module);
+
+const FILE = 'paymentWebhookRepository.ts';
 
 interface WebhookData {
   webhook_id: string;
@@ -40,7 +45,7 @@ interface WebhookCreateResult {
 /**
  * Create a new webhook record in the payment_webhooks table
  * Uses INSERT ON CONFLICT to prevent race conditions
- * 
+ *
  * @param data - Webhook data object
  * @param data.webhook_id - Unique webhook message ID from GOV.UK Pay
  * @param data.payment_id - Associated payment ID
@@ -55,13 +60,8 @@ interface WebhookCreateResult {
  */
 export async function createWebhook(data: WebhookData): Promise<WebhookCreateResult> {
   return withTransaction(async (client: PoolClient) => {
-    logger.info('[WebhookRepository] Executing INSERT query on payment_webhooks', {
-      table: 'payment_webhooks',
-      operation: 'insert',
-      webhookId: data.webhook_id,
-      paymentId: data.payment_id,
-      correlationId: data.correlation_id,
-    });
+    const start = Date.now();
+    logger.info(`[BACS][WEBHOOK][DATABASE][SAVING_WEBHOOK_RECORD][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
     try {
       const result = await client.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
         data.webhook_id,
@@ -77,40 +77,22 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
       const isDuplicate = row?.is_duplicate || false;
 
       if (isDuplicate) {
-        logger.info('[WebhookRepository] Duplicate webhook detected via ON CONFLICT - no row inserted into payment_webhooks', {
-          table: 'payment_webhooks',
-          operation: 'insert',
-          webhookId: data.webhook_id,
-          paymentId: data.payment_id,
-          existingStatus: row?.status,
-          correlationId: data.correlation_id,
-        });
+        logger.info(`[BACS][WEBHOOK][DATABASE][WEBHOOK_DUPLICATE_DETECTED][${FILE}][createWebhook] no row inserted (ON CONFLICT) - webhookId=${data.webhook_id} paymentId=${data.payment_id} existingStatus=${row?.status} correlationId=${data.correlation_id}`);
+        logger.info(`[BACS][WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
         return {
           isDuplicate: true,
           status: row?.status,
         };
       }
 
-      logger.info('[WebhookRepository] Webhook record inserted into payment_webhooks', {
-        table: 'payment_webhooks',
-        operation: 'insert',
-        webhookId: data.webhook_id,
-        paymentId: data.payment_id,
-        enqueuedAt: null,
-        correlationId: data.correlation_id,
-      });
+      logger.info(`[BACS][WEBHOOK][DATABASE][WEBHOOK_RECORD_SAVED][${FILE}][createWebhook] webhook record inserted - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
+      logger.info(`[BACS][WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
 
       return {
         isDuplicate: false,
       };
     } catch (error) {
-      logger.error('[WebhookRepository] Error inserting webhook record into payment_webhooks (will be rolled back)', {
-        table: 'payment_webhooks',
-        operation: 'insert',
-        error: error instanceof Error ? error.message : String(error),
-        webhookId: data.webhook_id,
-        correlationId: data.correlation_id,
-      });
+      logger.error(`[WEBHOOK][DATABASE][WEBHOOK_RECORD_SAVING_FAILED][${FILE}][createWebhook] error=${error instanceof Error ? error.message : String(error)} - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
       throw error;
     }
   });
@@ -118,78 +100,46 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
 
 /**
  * Find a webhook record by its unique webhook_id
- * 
+ *
  * @param webhookId - The unique webhook message ID to search for
  * @param correlationId - Correlation ID for request tracing
  * @returns Webhook record object or null if not found
  * @throws {Error} If database query fails
  */
 export async function findByWebhookId(webhookId: string, correlationId?: string): Promise<any | null> {
-  logger.info('[WebhookRepository] Executing SELECT query on payment_webhooks', {
-    table: 'payment_webhooks',
-    operation: 'select',
-    webhookId,
-    correlationId,
-  });
+  const start = Date.now();
+  logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][findByWebhookId] webhookId=${webhookId} correlationId=${correlationId}`);
   try {
     const result = await db.query(WEBHOOK_QUERIES.FIND_BY_WEBHOOK_ID, [webhookId]);
     const row = result.rows?.[0] || null;
 
-    logger.info('[WebhookRepository] Webhook record retrieved from payment_webhooks', {
-      table: 'payment_webhooks',
-      operation: 'select',
-      webhookId,
-      found: !!row,
-      correlationId,
-    });
+    logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][findByWebhookId] webhookId=${webhookId} found=${!!row} correlationId=${correlationId} durationMs=${Date.now() - start}`);
 
     return row;
   } catch (error) {
-    logger.error('[WebhookRepository] Error selecting webhook record from payment_webhooks', {
-      table: 'payment_webhooks',
-      operation: 'select',
-      error: error instanceof Error ? error.message : String(error),
-      webhookId,
-      correlationId,
-    });
+    logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][findByWebhookId] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
     throw error;
   }
 }
 
 /**
  * Update the processing status of a webhook record
- * 
+ *
  * @param webhookId - The webhook message ID to update
  * @param status - New status ('pending', 'processed', 'failed', 'retrying', 'dead_letter')
  * @param correlationId - Correlation ID for request tracing
  * @throws {Error} If database update fails
  */
 export async function updateWebhookStatus(webhookId: string, status: string, correlationId?: string): Promise<void> {
-  logger.info('[WebhookRepository] Executing UPDATE query on payment_webhooks', {
-    table: 'payment_webhooks',
-    operation: 'update',
-    webhookId,
-    status,
-    correlationId,
-  });
+  const start = Date.now();
+  logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
   try {
     await db.query(WEBHOOK_QUERIES.UPDATE_STATUS, [status, webhookId]);
 
-    logger.info('[WebhookRepository] Webhook status updated in payment_webhooks', {
-      table: 'payment_webhooks',
-      operation: 'update',
-      webhookId,
-      status,
-      correlationId,
-    });
+    logger.info(`[WEBHOOK][DATABASE][WEBHOOK_STATUS_UPDATED][${FILE}][updateWebhookStatus] webhook status updated - webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
+    logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   } catch (error) {
-    logger.error('[WebhookRepository] Error updating webhook status in payment_webhooks', {
-      table: 'payment_webhooks',
-      operation: 'update',
-      error: error instanceof Error ? error.message : String(error),
-      webhookId,
-      correlationId,
-    });
+    logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][updateWebhookStatus] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
     throw error;
   }
 }
