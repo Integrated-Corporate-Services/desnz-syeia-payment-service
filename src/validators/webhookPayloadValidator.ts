@@ -12,6 +12,8 @@ import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
+const FILE = 'webhookPayloadValidator.ts';
+
 /**
  * Validate webhook payload structure and required fields
  */
@@ -299,10 +301,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
   const result = validateWebhookPayload(req.body);
 
   if (!result.valid) {
-    logger.warn('[WebhookValidator] Payload validation failed', {
-      errors: result.errors,
-      body: req.body,
-    });
+    logger.error(`[GOVPAY][FAILED][${FILE}][validateWebhookPayloadMiddleware] error=payload_validation_failed errors=${JSON.stringify(result.errors)}`);
 
     return res.status(400).json({
       error: 'Invalid webhook payload',
@@ -310,10 +309,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
     });
   }
 
-  logger.info('[WebhookValidator] Payload validation passed', {
-    webhook_message_id: req.body.webhook_message_id,
-    event_type: req.body.event_type,
-  });
+  logger.info(`[GOVPAY][EVENT][${FILE}][validateWebhookPayloadMiddleware] payload validation passed - webhookId=${req.body.webhook_message_id} eventType=${req.body.event_type}`);
 
   next();
 }

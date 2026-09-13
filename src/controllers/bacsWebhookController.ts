@@ -23,6 +23,8 @@ import {
 
 const logger = getLogger(module);
 
+const FILE = 'bacsWebhookController.ts';
+
 interface BACSWebhookRequest extends Request {
   BACSWebhookEvent?: BACSWebhookPayload;
   paymentId?: string;
@@ -36,18 +38,19 @@ interface BACSWebhookProcessingResult {
 }
 
 async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promise<Response> {
+  const start = Date.now();
   const webhookEvent = req.BACSWebhookEvent;
   const paymentId = req.paymentId;
-  
+
   const eventId = webhookEvent?.event?.eventId || uuidv4();
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
   const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
-  logger.start('BACSWebhook', 'handleBACSWebhook', { eventId, deliveryId, correlationId });
+  logger.info(`[BACS][STARTED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
   try {
     return await handleBACSWebhookInternal(req, res, { webhookEvent, paymentId, eventId, deliveryId, correlationId });
   } finally {
-    logger.end('BACSWebhook', 'handleBACSWebhook', { eventId, deliveryId, correlationId });
+    logger.info(`[BACS][ENDED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   }
 }
 
@@ -65,39 +68,16 @@ async function handleBACSWebhookInternal(
   const { webhookEvent, paymentId, eventId, deliveryId, correlationId } = ctx;
 
   if (!webhookEvent) {
-    logger.error('[BACSWebhook] Invalid event structure', {
-      eventId,
-      deliveryId,
-      correlationId,
-      outcome: OUTCOME_ERROR_VALIDATION,
-      error_category: ERROR_CATEGORIES.VALIDATION,
-      error_code: ERROR_CODES.INVALID_WEBHOOK_STRUCTURE,
-    });
+    logger.error(`[BACS][FAILED][${FILE}][handleBACSWebhookInternal] error=invalid_event_structure outcome=${OUTCOME_ERROR_VALIDATION} category=${ERROR_CATEGORIES.VALIDATION} code=${ERROR_CODES.INVALID_WEBHOOK_STRUCTURE} - eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Invalid webhook event structure'));
   }
 
   if (!paymentId || typeof paymentId !== 'string' || paymentId.length === 0) {
-    logger.error('[BACSWebhook] Invalid payment reference', {
-      eventId,
-      deliveryId,
-      correlationId,
-      outcome: OUTCOME_ERROR_VALIDATION,
-      error_category: ERROR_CATEGORIES.VALIDATION,
-      error_code: ERROR_CODES.INVALID_PAYMENT_ID,
-    });
+    logger.error(`[BACS][FAILED][${FILE}][handleBACSWebhookInternal] error=invalid_payment_reference outcome=${OUTCOME_ERROR_VALIDATION} category=${ERROR_CATEGORIES.VALIDATION} code=${ERROR_CODES.INVALID_PAYMENT_ID} - eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Missing or invalid payment reference'));
   }
 
-  logger.info('[BACSWebhook] Webhook received', {
-    eventId,
-    deliveryId,
-    paymentReference: paymentId,
-    eventType: webhookEvent.event.eventType,
-    paymentStatus: webhookEvent.detail.status,
-    attemptNumber: webhookEvent.callback?.attemptNumber,
-    source: webhookEvent.event.source,
-    correlationId,
-  });
+  logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] webhook received - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} eventType=${webhookEvent.event.eventType} paymentStatus=${webhookEvent.detail.status} attemptNumber=${webhookEvent.callback?.attemptNumber} source=${webhookEvent.event.source} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializeWebhookPayload(req.body);
@@ -110,47 +90,18 @@ async function handleBACSWebhookInternal(
     );
 
     if (result.isDuplicate) {
-      logger.info('[BACSWebhook] Duplicate acknowledged', {
-        eventId,
-        deliveryId,
-        paymentId,
-        correlationId,
-        outcome: OUTCOME_DUPLICATE,
-        status_code: HTTP_STATUS.OK,
-        is_duplicate: true,
-        error_code: ERROR_CODES.DUPLICATE_WEBHOOK,
-      });
+      logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] duplicate acknowledged - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_DUPLICATE} correlationId=${correlationId}`);
       return res.status(HTTP_STATUS.OK).json(buildDuplicateResponse(correlationId));
     }
 
     if (result.success) {
-      logger.info('[BACSWebhook] Webhook queued', {
-        eventId,
-        deliveryId,
-        paymentId,
-        correlationId,
-        outcome: OUTCOME_SUCCESS,
-        status_code: HTTP_STATUS.ACCEPTED,
-        is_duplicate: false,
-      });
+      logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] webhook queued - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_SUCCESS} correlationId=${correlationId}`);
       return res.status(HTTP_STATUS.ACCEPTED).json(buildSuccessResponse(correlationId));
     }
 
     if (result.retryable) {
       const sanitizedError = createSanitizedErrorLog(result.error);
-      logger.warn('[BACSWebhook] Retryable error - database issue', {
-        eventId,
-        deliveryId,
-        paymentId,
-        error_message: sanitizedError.sanitized_message,
-        error_type: sanitizedError.error_type,
-        correlationId,
-        outcome: OUTCOME_ERROR_DATABASE,
-        error_category: ERROR_CATEGORIES.DATABASE,
-        error_code: ERROR_CODES.DATABASE_ERROR,
-        error_retryable: true,
-        status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-      });
+      logger.error(`[BACS][FAILED][${FILE}][handleBACSWebhookInternal] error=${sanitizedError.sanitized_message} errorType=${sanitizedError.error_type} outcome=${OUTCOME_ERROR_DATABASE} category=${ERROR_CATEGORIES.DATABASE} code=${ERROR_CODES.DATABASE_ERROR} retryable=true - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} correlationId=${correlationId}`);
       return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         error: 'Internal error — please retry',
         errorCode: ERROR_CODES.DATABASE_ERROR,
@@ -158,38 +109,14 @@ async function handleBACSWebhookInternal(
     }
 
     const sanitizedError = createSanitizedErrorLog(result.error);
-    logger.error('[BACSWebhook] Permanent error - database issue', {
-      eventId,
-      deliveryId,
-      paymentId,
-      error_message: sanitizedError.sanitized_message,
-      error_type: sanitizedError.error_type,
-      correlationId,
-      outcome: OUTCOME_ERROR_DATABASE,
-      error_category: 'database',
-      error_code: ERROR_CODES.DATABASE_ERROR,
-      error_retryable: false,
-      status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    });
+    logger.error(`[BACS][FAILED][${FILE}][handleBACSWebhookInternal] error=${sanitizedError.sanitized_message} errorType=${sanitizedError.error_type} outcome=${OUTCOME_ERROR_DATABASE} code=${ERROR_CODES.DATABASE_ERROR} retryable=false - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} correlationId=${correlationId}`);
     return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: 'Internal error — please retry',
       errorCode: ERROR_CODES.DATABASE_ERROR,
     });
   } catch (error) {
     const sanitizedError = createSanitizedErrorLog(error);
-    logger.error('[BACSWebhook] Unexpected error', {
-      error_message: sanitizedError.sanitized_message,
-      error_type: sanitizedError.error_type,
-      is_database_error: sanitizedError.is_database_error,
-      eventId,
-      deliveryId,
-      paymentId,
-      correlationId,
-      outcome: OUTCOME_ERROR_INTERNAL,
-      error_category: ERROR_CATEGORIES.INTERNAL,
-      error_code: ERROR_CODES.INTERNAL_SERVER_ERROR,
-      status_code: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    });
+    logger.error(`[BACS][FAILED][${FILE}][handleBACSWebhookInternal] error=${sanitizedError.sanitized_message} errorType=${sanitizedError.error_type} isDatabaseError=${sanitizedError.is_database_error} outcome=${OUTCOME_ERROR_INTERNAL} category=${ERROR_CATEGORIES.INTERNAL} code=${ERROR_CODES.INTERNAL_SERVER_ERROR} - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} correlationId=${correlationId}`);
     return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: 'Internal error — please retry',
       errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR,
@@ -198,7 +125,8 @@ async function handleBACSWebhookInternal(
 }
 
 async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> {
-  logger.start('BACSHealth', 'BACSHealthCheck');
+  const start = Date.now();
+  logger.info(`[BACS][STARTED][${FILE}][BACSHealthCheck] applicationId=n/a`);
   const health = {
     status: 'healthy' as 'healthy' | 'unhealthy',
     service: 'bacs-webhook-receiver',
@@ -216,7 +144,7 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[BACSHealth] Database down', { error: dbCheck.error });
+      logger.error(`[BACS][FAILED][${FILE}][BACSHealthCheck] error=database_down - error=${dbCheck.error} durationMs=${Date.now() - start}`);
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -225,13 +153,11 @@ async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> 
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[BACSHealth] Check failed', { error: error instanceof Error ? error.message : String(error) });
+    logger.error(`[BACS][FAILED][${FILE}][BACSHealthCheck] error=${error instanceof Error ? error.message : String(error)} durationMs=${Date.now() - start}`);
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
-  } finally {
-    logger.end('BACSHealth', 'BACSHealthCheck', { status: health.status });
   }
 
-  logger.debug('[BACSHealth] Health check passed', { health });
+  logger.info(`[BACS][ENDED][${FILE}][BACSHealthCheck] status=${health.status} durationMs=${Date.now() - start}`);
   return res.status(HTTP_STATUS.OK).json(health);
 }
 

@@ -8,6 +8,8 @@ import { checkDatabaseConnectivity } from '../database/db';
 
 const logger = getLogger(module);
 
+const FILE = 'callbackController.ts';
+
 const WEBHOOK_STATUS = {
   DUPLICATE: 'duplicate',
   RETRYABLE_ERROR: 'retryable_error',
@@ -53,7 +55,7 @@ function isValidWebhookEvent(event: unknown): event is WebhookEvent {
   if (!event || typeof event !== 'object') {
     return false;
   }
-  
+
   const webhookEvent = event as WebhookEvent;
   return typeof webhookEvent.event_type === 'string' && webhookEvent.event_type.length > 0;
 }
@@ -68,9 +70,7 @@ function serializePayload(body: unknown): string {
     }
     return JSON.stringify(body);
   } catch (error) {
-    logger.warn('Failed to serialize webhook payload', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.warn(`[GOVPAY][EVENT][${FILE}][serializePayload] failed to serialize webhook payload - error=${error instanceof Error ? error.message : String(error)}`);
     return '{}';
   }
 }
@@ -78,7 +78,7 @@ function serializePayload(body: unknown): string {
 /**
  * Handle webhook endpoint
  * POST /webhook
- * 
+ *
  * Flow:
  * 1. Signature verification (completed by middleware before reaching this controller)
  * 2. Validate webhook event structure and extract identifiers
@@ -88,16 +88,17 @@ function serializePayload(body: unknown): string {
  * 6. Lambda processes in background and updates payment status
  */
 async function handleWebhook(req: WebhookRequest, res: Response): Promise<Response> {
+  const start = Date.now();
   const webhookEvent = req.webhookEvent;
   const paymentId = req.paymentId;
   const webhookId: string = (webhookEvent?.webhook_message_id as string) || uuidv4();
   const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
-  logger.start('WebhookController', 'handleWebhook', { webhookId, correlationId });
+  logger.info(`[GOVPAY][STARTED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId}`);
   try {
     return await handleWebhookInternal(req, res, { webhookEvent, paymentId, webhookId, correlationId });
   } finally {
-    logger.end('WebhookController', 'handleWebhook', { webhookId, correlationId });
+    logger.info(`[GOVPAY][ENDED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   }
 }
 
@@ -110,12 +111,8 @@ async function handleWebhookInternal(
 
   // Validate required webhook event structure
   if (!isValidWebhookEvent(webhookEvent)) {
-    logger.error('Invalid webhook event structure', {
-      webhookId,
-      correlationId,
-      hasWebhookEvent: !!webhookEvent,
-    });
-    
+    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=invalid_webhook_event_structure - webhookId=${webhookId} correlationId=${correlationId}`);
+
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.ERROR,
       webhookId,
@@ -126,12 +123,8 @@ async function handleWebhookInternal(
 
   // Validate payment ID
   if (!paymentId || typeof paymentId !== 'string' || paymentId.length === 0) {
-    logger.error('Missing or invalid payment ID', {
-      webhookId,
-      eventType: webhookEvent.event_type,
-      correlationId,
-    });
-    
+    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=missing_or_invalid_payment_id - webhookId=${webhookId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.ERROR,
       webhookId,
@@ -140,12 +133,7 @@ async function handleWebhookInternal(
     } as WebhookResponse);
   }
 
-  logger.info('Webhook received', {
-    webhookId,
-    paymentId,
-    eventType: webhookEvent.event_type,
-    correlationId,
-  });
+  logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] webhook received - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializePayload(req.body);
@@ -160,11 +148,7 @@ async function handleWebhookInternal(
 
     // Handle duplicate webhooks - idempotency
     if (result.isDuplicate) {
-      logger.info('Duplicate webhook acknowledged', {
-        webhookId,
-        paymentId,
-        correlationId,
-      });
+      logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] duplicate webhook acknowledged - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.DUPLICATE,
@@ -177,12 +161,7 @@ async function handleWebhookInternal(
 
     // Success: Webhook stored and queued for async processing
     if (result.success) {
-      logger.info('Webhook acknowledged and queued', {
-        webhookId,
-        paymentId,
-        eventType: webhookEvent.event_type,
-        correlationId,
-      });
+      logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] webhook acknowledged and queued - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: 'success',
@@ -194,12 +173,7 @@ async function handleWebhookInternal(
     }
 
     if (result.retryable) {
-      logger.warn('Webhook processing encountered retryable error', {
-        webhookId,
-        paymentId,
-        error: result.error,
-        correlationId,
-      });
+      logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] outcome=retryable_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.RETRYABLE_ERROR,
@@ -210,12 +184,7 @@ async function handleWebhookInternal(
     }
 
     // Permanent failure (e.g., invalid event type, database constraint violation)
-    logger.error('Webhook processing permanent error', {
-      webhookId,
-      paymentId,
-      error: result.error,
-      correlationId,
-    });
+    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] outcome=permanent_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.PERMANENT_ERROR,
@@ -223,14 +192,10 @@ async function handleWebhookInternal(
       paymentId,
       message: 'Webhook accepted but cannot be processed',
     } as WebhookResponse);
-    
+
   } catch (error) {
-    logger.error('Unexpected error processing webhook', {
-      error: error instanceof Error ? error.message : String(error),
+    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`, {
       stack: error instanceof Error ? error.stack : undefined,
-      webhookId,
-      paymentId,
-      correlationId,
     });
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
@@ -248,7 +213,8 @@ async function handleWebhookInternal(
  * Returns 200 if all checks pass, 503 if any check fails
  */
 async function healthCheck(_req: Request, res: Response): Promise<Response> {
-  logger.start('Health', 'healthCheck');
+  const start = Date.now();
+  logger.info(`[GOVPAY][STARTED][${FILE}][healthCheck] applicationId=n/a`);
   const health: any = {
     status: 'healthy',
     service: 'payment-webhook-receiver',
@@ -270,7 +236,7 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error('[Health] Database connectivity check failed', { error: dbCheck.error });
+      logger.error(`[GOVPAY][FAILED][${FILE}][healthCheck] error=database_connectivity_check_failed - error=${dbCheck.error} durationMs=${Date.now() - start}`);
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -279,12 +245,11 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error('[Health] Database check failed', { error: error instanceof Error ? error.message : String(error) });
+    logger.error(`[GOVPAY][FAILED][${FILE}][healthCheck] error=${error instanceof Error ? error.message : String(error)} durationMs=${Date.now() - start}`);
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
-  } finally {
-    logger.end('Health', 'healthCheck', { status: health.status });
   }
 
+  logger.info(`[GOVPAY][ENDED][${FILE}][healthCheck] status=${health.status} durationMs=${Date.now() - start}`);
   return res.status(HTTP_STATUS.OK).json(health);
 }
 
