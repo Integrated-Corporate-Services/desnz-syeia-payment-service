@@ -46,11 +46,11 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
   const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
   const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
-  logger.info(`[BACS][WEBHOOK][WEBHOOK_RECEIVED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
+  logger.info(`[BACS][BACS_WEBHOOK][RECEIVED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
   try {
     return await handleBACSWebhookInternal(req, res, { webhookEvent, paymentId, eventId, deliveryId, correlationId });
   } finally {
-    logger.info(`[BACS][WEBHOOK][ENDED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.info(`[BACS][BACS_WEBHOOK][ENDED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   }
 }
 

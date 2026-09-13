@@ -29,11 +29,11 @@ export async function processBACSWebhook(
   correlationId: string
 ): Promise<BACSWebhookProcessingResult> {
   const startTime = Date.now();
-  logger.info(`[BACS][WEBHOOK][STARTED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+  logger.info(`[BACS][BACS_WEBHOOK_PROCESSING][STARTED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
   try {
     return await processBACSWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
   } finally {
-    logger.info(`[BACS][WEBHOOK][ENDED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
+    logger.info(`[BACS][BACS_WEBHOOK_PROCESSING][ENDED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
   }
 }
 
