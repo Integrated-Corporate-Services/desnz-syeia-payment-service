@@ -40,7 +40,7 @@ export function validateBACSWebhookPayloadMiddleware(
     (req as any).BACSWebhookEvent = req.body;
     (req as any).paymentId = req.body.payment.paymentReference;
 
-    logger.info(`[BACS][EVENT][${FILE}][validateBACSWebhookPayloadMiddleware] payload validation successful - correlationId=${correlationId} eventId=${req.body.event.eventId} eventType=${req.body.event.eventType} paymentReference=${req.body.payment.paymentReference}`);
+    logger.info(`[BACS][PAYLOAD_VALIDATED][${FILE}][validateBACSWebhookPayloadMiddleware] payload validation successful - correlationId=${correlationId} eventId=${req.body.event.eventId} eventType=${req.body.event.eventType} paymentReference=${req.body.payment.paymentReference}`);
 
     next();
   } finally {

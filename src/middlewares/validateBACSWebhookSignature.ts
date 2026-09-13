@@ -166,6 +166,6 @@ function validateBACSWebhookSignatureInternal(
     });
   }
 
-  logger.info(`[BACS][EVENT][${FILE}][validateBACSWebhookSignatureInternal] signature validated - correlationId=${correlationId} timestamp=${timestamp} eventId=${req.body?.event?.eventId}`);
+  logger.info(`[BACS][SIGNATURE_VALIDATED][${FILE}][validateBACSWebhookSignatureInternal] signature validated - correlationId=${correlationId} timestamp=${timestamp} eventId=${req.body?.event?.eventId}`);
   next();
 }

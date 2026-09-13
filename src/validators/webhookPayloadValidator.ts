@@ -309,7 +309,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
     });
   }
 
-  logger.info(`[GOVPAY][EVENT][${FILE}][validateWebhookPayloadMiddleware] payload validation passed - webhookId=${req.body.webhook_message_id} eventType=${req.body.event_type}`);
+  logger.info(`[GOVPAY][PAYLOAD_VALIDATED][${FILE}][validateWebhookPayloadMiddleware] payload validation passed - webhookId=${req.body.webhook_message_id} eventType=${req.body.event_type}`);
 
   next();
 }

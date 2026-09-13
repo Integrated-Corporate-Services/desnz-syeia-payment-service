@@ -45,7 +45,7 @@ async function processBACSWebhookInternal(
   correlationId: string,
   startTime: number
 ): Promise<BACSWebhookProcessingResult> {
-  logger.info(`[BACS][EVENT][${FILE}][processBACSWebhookInternal] processing BACS webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} source=${event.event.source} correlationId=${correlationId}`);
+  logger.info(`[BACS][WEBHOOK_RECEIVED][${FILE}][processBACSWebhookInternal] processing BACS webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} source=${event.event.source} correlationId=${correlationId}`);
 
   if (!config.features.callbackServiceEnabled) {
     logger.error(`[BACS][FAILED][${FILE}][processBACSWebhookInternal] error=callback_service_disabled category=${ERROR_CATEGORY_CONFIGURATION} code=${ERROR_CODES.CONFIGURATION_ERROR} - webhookId=${webhookId} correlationId=${correlationId}`);
@@ -72,12 +72,12 @@ async function processBACSWebhookInternal(
     });
 
     if (createResult && createResult.isDuplicate) {
-      logger.info(`[BACS][EVENT][${FILE}][processBACSWebhookInternal] duplicate detected - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+      logger.info(`[BACS][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processBACSWebhookInternal] duplicate detected - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
       return { success: true, isDuplicate: true, paymentId };
     }
 
     const duration = Date.now() - startTime;
-    logger.info(`[BACS][EVENT][${FILE}][processBACSWebhookInternal] webhook stored - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} durationMs=${duration} correlationId=${correlationId}`);
+    logger.info(`[BACS][WEBHOOK_STORED][${FILE}][processBACSWebhookInternal] webhook stored - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} durationMs=${duration} correlationId=${correlationId}`);
 
     return { success: true, isDuplicate: false, paymentId };
   } catch (error: any) {

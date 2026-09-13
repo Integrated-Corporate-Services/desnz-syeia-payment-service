@@ -70,7 +70,7 @@ function serializePayload(body: unknown): string {
     }
     return JSON.stringify(body);
   } catch (error) {
-    logger.warn(`[GOVPAY][EVENT][${FILE}][serializePayload] failed to serialize webhook payload - error=${error instanceof Error ? error.message : String(error)}`);
+    logger.warn(`[GOVPAY][PAYLOAD_SERIALIZE_FAILED][${FILE}][serializePayload] failed to serialize webhook payload - error=${error instanceof Error ? error.message : String(error)}`);
     return '{}';
   }
 }
@@ -133,7 +133,7 @@ async function handleWebhookInternal(
     } as WebhookResponse);
   }
 
-  logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] webhook received - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK_RECEIVED][${FILE}][handleWebhookInternal] webhook received - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializePayload(req.body);
@@ -148,7 +148,7 @@ async function handleWebhookInternal(
 
     // Handle duplicate webhooks - idempotency
     if (result.isDuplicate) {
-      logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] duplicate webhook acknowledged - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK_DUPLICATE_ACKNOWLEDGED][${FILE}][handleWebhookInternal] duplicate webhook acknowledged - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.DUPLICATE,
@@ -161,7 +161,7 @@ async function handleWebhookInternal(
 
     // Success: Webhook stored and queued for async processing
     if (result.success) {
-      logger.info(`[GOVPAY][EVENT][${FILE}][handleWebhookInternal] webhook acknowledged and queued - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK_QUEUED][${FILE}][handleWebhookInternal] webhook acknowledged and queued - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: 'success',

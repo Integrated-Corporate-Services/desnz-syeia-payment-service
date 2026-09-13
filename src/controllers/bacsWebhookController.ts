@@ -77,7 +77,7 @@ async function handleBACSWebhookInternal(
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Missing or invalid payment reference'));
   }
 
-  logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] webhook received - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} eventType=${webhookEvent.event.eventType} paymentStatus=${webhookEvent.detail.status} attemptNumber=${webhookEvent.callback?.attemptNumber} source=${webhookEvent.event.source} correlationId=${correlationId}`);
+  logger.info(`[BACS][WEBHOOK_RECEIVED][${FILE}][handleBACSWebhookInternal] webhook received - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} eventType=${webhookEvent.event.eventType} paymentStatus=${webhookEvent.detail.status} attemptNumber=${webhookEvent.callback?.attemptNumber} source=${webhookEvent.event.source} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializeWebhookPayload(req.body);
@@ -90,12 +90,12 @@ async function handleBACSWebhookInternal(
     );
 
     if (result.isDuplicate) {
-      logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] duplicate acknowledged - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_DUPLICATE} correlationId=${correlationId}`);
+      logger.info(`[BACS][WEBHOOK_DUPLICATE_ACKNOWLEDGED][${FILE}][handleBACSWebhookInternal] duplicate acknowledged - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_DUPLICATE} correlationId=${correlationId}`);
       return res.status(HTTP_STATUS.OK).json(buildDuplicateResponse(correlationId));
     }
 
     if (result.success) {
-      logger.info(`[BACS][EVENT][${FILE}][handleBACSWebhookInternal] webhook queued - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_SUCCESS} correlationId=${correlationId}`);
+      logger.info(`[BACS][WEBHOOK_QUEUED][${FILE}][handleBACSWebhookInternal] webhook queued - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} outcome=${OUTCOME_SUCCESS} correlationId=${correlationId}`);
       return res.status(HTTP_STATUS.ACCEPTED).json(buildSuccessResponse(correlationId));
     }
 

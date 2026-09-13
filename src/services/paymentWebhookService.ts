@@ -57,7 +57,7 @@ async function processWebhookInternal(
   correlationId: string,
   startTime: number
 ): Promise<WebhookProcessingResult> {
-  logger.info(`[GOVPAY][EVENT][${FILE}][processWebhookInternal] processing webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type || 'unknown'} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK_RECEIVED][${FILE}][processWebhookInternal] processing webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type || 'unknown'} correlationId=${correlationId}`);
 
   if (!config.features.callbackServiceEnabled) {
     logger.error(`[GOVPAY][FAILED][${FILE}][processWebhookInternal] error=callback_service_disabled - webhookId=${webhookId} correlationId=${correlationId}`);
@@ -85,7 +85,7 @@ async function processWebhookInternal(
 
     // Check if this was a duplicate (returned by ON CONFLICT)
     if (createResult && createResult.isDuplicate) {
-      logger.info(`[GOVPAY][EVENT][${FILE}][processWebhookInternal] duplicate webhook detected - webhookId=${webhookId} paymentId=${paymentId} previousStatus=${createResult.status} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processWebhookInternal] duplicate webhook detected - webhookId=${webhookId} paymentId=${paymentId} previousStatus=${createResult.status} correlationId=${correlationId}`);
 
       return {
         success: true,
@@ -95,7 +95,7 @@ async function processWebhookInternal(
     }
 
     const duration = Date.now() - startTime;
-    logger.info(`[GOVPAY][EVENT][${FILE}][processWebhookInternal] webhook stored successfully - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type} durationMs=${duration} correlationId=${correlationId}`);
+    logger.info(`[GOVPAY][WEBHOOK_STORED][${FILE}][processWebhookInternal] webhook stored successfully - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type} durationMs=${duration} correlationId=${correlationId}`);
 
     return {
       success: true,
