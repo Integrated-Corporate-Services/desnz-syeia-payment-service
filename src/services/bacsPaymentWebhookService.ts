@@ -29,11 +29,11 @@ export async function processBACSWebhook(
   correlationId: string
 ): Promise<BACSWebhookProcessingResult> {
   const startTime = Date.now();
-  logger.info(`[BACS][STARTED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+  logger.info(`[BACS][WEBHOOK][STARTED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
   try {
     return await processBACSWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
   } finally {
-    logger.info(`[BACS][ENDED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
+    logger.info(`[BACS][WEBHOOK][ENDED][${FILE}][processBACSWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
   }
 }
 
@@ -45,10 +45,10 @@ async function processBACSWebhookInternal(
   correlationId: string,
   startTime: number
 ): Promise<BACSWebhookProcessingResult> {
-  logger.info(`[BACS][WEBHOOK_RECEIVED][${FILE}][processBACSWebhookInternal] processing BACS webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} source=${event.event.source} correlationId=${correlationId}`);
+  logger.info(`[BACS][WEBHOOK][WEBHOOK_RECEIVED][${FILE}][processBACSWebhookInternal] processing BACS webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} source=${event.event.source} correlationId=${correlationId}`);
 
   if (!config.features.callbackServiceEnabled) {
-    logger.error(`[BACS][FAILED][${FILE}][processBACSWebhookInternal] error=callback_service_disabled category=${ERROR_CATEGORY_CONFIGURATION} code=${ERROR_CODES.CONFIGURATION_ERROR} - webhookId=${webhookId} correlationId=${correlationId}`);
+    logger.error(`[BACS][WEBHOOK][FAILED][${FILE}][processBACSWebhookInternal] error=callback_service_disabled category=${ERROR_CATEGORY_CONFIGURATION} code=${ERROR_CODES.CONFIGURATION_ERROR} - webhookId=${webhookId} correlationId=${correlationId}`);
     return {
       success: false,
       isDuplicate: false,
@@ -72,19 +72,19 @@ async function processBACSWebhookInternal(
     });
 
     if (createResult && createResult.isDuplicate) {
-      logger.info(`[BACS][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processBACSWebhookInternal] duplicate detected - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+      logger.info(`[BACS][WEBHOOK][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processBACSWebhookInternal] duplicate detected - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
       return { success: true, isDuplicate: true, paymentId };
     }
 
     const duration = Date.now() - startTime;
-    logger.info(`[BACS][WEBHOOK_STORED][${FILE}][processBACSWebhookInternal] webhook stored - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} durationMs=${duration} correlationId=${correlationId}`);
+    logger.info(`[BACS][WEBHOOK][WEBHOOK_STORED][${FILE}][processBACSWebhookInternal] webhook stored - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event.eventType} status=${event.detail.status} durationMs=${duration} correlationId=${correlationId}`);
 
     return { success: true, isDuplicate: false, paymentId };
   } catch (error: any) {
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
-    logger.error(`[BACS][FAILED][${FILE}][processBACSWebhookInternal] error=${errorMessage} code=${error.code || ERROR_CODES.DATABASE_ERROR} category=${ERROR_CATEGORY_DATABASE} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${duration}`);
+    logger.error(`[BACS][WEBHOOK][FAILED][${FILE}][processBACSWebhookInternal] error=${errorMessage} code=${error.code || ERROR_CODES.DATABASE_ERROR} category=${ERROR_CATEGORY_DATABASE} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${duration}`);
 
     return {
       success: false,

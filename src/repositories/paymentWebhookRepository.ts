@@ -61,7 +61,7 @@ interface WebhookCreateResult {
 export async function createWebhook(data: WebhookData): Promise<WebhookCreateResult> {
   return withTransaction(async (client: PoolClient) => {
     const start = Date.now();
-    logger.info(`[WEBHOOK][STARTED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
+    logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
     try {
       const result = await client.query(WEBHOOK_QUERIES.CREATE_WEBHOOK_WITH_CONFLICT, [
         data.webhook_id,
@@ -77,22 +77,22 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
       const isDuplicate = row?.is_duplicate || false;
 
       if (isDuplicate) {
-        logger.info(`[WEBHOOK][WEBHOOK_DUPLICATE_DETECTED][${FILE}][createWebhook] no row inserted (ON CONFLICT) - webhookId=${data.webhook_id} paymentId=${data.payment_id} existingStatus=${row?.status} correlationId=${data.correlation_id}`);
-        logger.info(`[WEBHOOK][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+        logger.info(`[WEBHOOK][DATABASE][WEBHOOK_DUPLICATE_DETECTED][${FILE}][createWebhook] no row inserted (ON CONFLICT) - webhookId=${data.webhook_id} paymentId=${data.payment_id} existingStatus=${row?.status} correlationId=${data.correlation_id}`);
+        logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
         return {
           isDuplicate: true,
           status: row?.status,
         };
       }
 
-      logger.info(`[WEBHOOK][WEBHOOK_RECORD_INSERTED][${FILE}][createWebhook] webhook record inserted - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
-      logger.info(`[WEBHOOK][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+      logger.info(`[WEBHOOK][DATABASE][WEBHOOK_RECORD_INSERTED][${FILE}][createWebhook] webhook record inserted - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id}`);
+      logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][createWebhook] webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
 
       return {
         isDuplicate: false,
       };
     } catch (error) {
-      logger.error(`[WEBHOOK][FAILED][${FILE}][createWebhook] error=${error instanceof Error ? error.message : String(error)} - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
+      logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][createWebhook] error=${error instanceof Error ? error.message : String(error)} - webhookId=${data.webhook_id} paymentId=${data.payment_id} correlationId=${data.correlation_id} durationMs=${Date.now() - start}`);
       throw error;
     }
   });
@@ -108,16 +108,16 @@ export async function createWebhook(data: WebhookData): Promise<WebhookCreateRes
  */
 export async function findByWebhookId(webhookId: string, correlationId?: string): Promise<any | null> {
   const start = Date.now();
-  logger.info(`[WEBHOOK][STARTED][${FILE}][findByWebhookId] webhookId=${webhookId} correlationId=${correlationId}`);
+  logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][findByWebhookId] webhookId=${webhookId} correlationId=${correlationId}`);
   try {
     const result = await db.query(WEBHOOK_QUERIES.FIND_BY_WEBHOOK_ID, [webhookId]);
     const row = result.rows?.[0] || null;
 
-    logger.info(`[WEBHOOK][ENDED][${FILE}][findByWebhookId] webhookId=${webhookId} found=${!!row} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][findByWebhookId] webhookId=${webhookId} found=${!!row} correlationId=${correlationId} durationMs=${Date.now() - start}`);
 
     return row;
   } catch (error) {
-    logger.error(`[WEBHOOK][FAILED][${FILE}][findByWebhookId] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][findByWebhookId] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
     throw error;
   }
 }
@@ -132,14 +132,14 @@ export async function findByWebhookId(webhookId: string, correlationId?: string)
  */
 export async function updateWebhookStatus(webhookId: string, status: string, correlationId?: string): Promise<void> {
   const start = Date.now();
-  logger.info(`[WEBHOOK][STARTED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
+  logger.info(`[WEBHOOK][DATABASE][STARTED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
   try {
     await db.query(WEBHOOK_QUERIES.UPDATE_STATUS, [status, webhookId]);
 
-    logger.info(`[WEBHOOK][WEBHOOK_STATUS_UPDATED][${FILE}][updateWebhookStatus] webhook status updated - webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
-    logger.info(`[WEBHOOK][ENDED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.info(`[WEBHOOK][DATABASE][WEBHOOK_STATUS_UPDATED][${FILE}][updateWebhookStatus] webhook status updated - webhookId=${webhookId} status=${status} correlationId=${correlationId}`);
+    logger.info(`[WEBHOOK][DATABASE][ENDED][${FILE}][updateWebhookStatus] webhookId=${webhookId} status=${status} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   } catch (error) {
-    logger.error(`[WEBHOOK][FAILED][${FILE}][updateWebhookStatus] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.error(`[WEBHOOK][DATABASE][FAILED][${FILE}][updateWebhookStatus] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
     throw error;
   }
 }

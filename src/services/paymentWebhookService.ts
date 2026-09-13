@@ -41,11 +41,11 @@ export async function processWebhook(
   correlationId: string
 ): Promise<WebhookProcessingResult> {
   const startTime = Date.now();
-  logger.info(`[GOVPAY][STARTED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK][STARTED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
   try {
     return await processWebhookInternal(webhookId, paymentId, event, rawPayload, correlationId, startTime);
   } finally {
-    logger.info(`[GOVPAY][ENDED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
+    logger.info(`[GOVPAY][WEBHOOK][ENDED][${FILE}][processWebhook] webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${Date.now() - startTime}`);
   }
 }
 
@@ -57,10 +57,10 @@ async function processWebhookInternal(
   correlationId: string,
   startTime: number
 ): Promise<WebhookProcessingResult> {
-  logger.info(`[GOVPAY][WEBHOOK_RECEIVED][${FILE}][processWebhookInternal] processing webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type || 'unknown'} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_RECEIVED][${FILE}][processWebhookInternal] processing webhook - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type || 'unknown'} correlationId=${correlationId}`);
 
   if (!config.features.callbackServiceEnabled) {
-    logger.error(`[GOVPAY][FAILED][${FILE}][processWebhookInternal] error=callback_service_disabled - webhookId=${webhookId} correlationId=${correlationId}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][processWebhookInternal] error=callback_service_disabled - webhookId=${webhookId} correlationId=${correlationId}`);
     return {
       success: false,
       isDuplicate: false,
@@ -85,7 +85,7 @@ async function processWebhookInternal(
 
     // Check if this was a duplicate (returned by ON CONFLICT)
     if (createResult && createResult.isDuplicate) {
-      logger.info(`[GOVPAY][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processWebhookInternal] duplicate webhook detected - webhookId=${webhookId} paymentId=${paymentId} previousStatus=${createResult.status} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_DUPLICATE_DETECTED][${FILE}][processWebhookInternal] duplicate webhook detected - webhookId=${webhookId} paymentId=${paymentId} previousStatus=${createResult.status} correlationId=${correlationId}`);
 
       return {
         success: true,
@@ -95,7 +95,7 @@ async function processWebhookInternal(
     }
 
     const duration = Date.now() - startTime;
-    logger.info(`[GOVPAY][WEBHOOK_STORED][${FILE}][processWebhookInternal] webhook stored successfully - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type} durationMs=${duration} correlationId=${correlationId}`);
+    logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_STORED][${FILE}][processWebhookInternal] webhook stored successfully - webhookId=${webhookId} paymentId=${paymentId} eventType=${event.event_type} durationMs=${duration} correlationId=${correlationId}`);
 
     return {
       success: true,
@@ -106,7 +106,7 @@ async function processWebhookInternal(
     const errorMessage = error.message || String(error);
     const duration = Date.now() - startTime;
 
-    logger.error(`[GOVPAY][FAILED][${FILE}][processWebhookInternal] error=${errorMessage} code=${error.code} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${duration}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][processWebhookInternal] error=${errorMessage} code=${error.code} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId} durationMs=${duration}`);
 
     return {
       success: false,

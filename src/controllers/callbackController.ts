@@ -70,7 +70,7 @@ function serializePayload(body: unknown): string {
     }
     return JSON.stringify(body);
   } catch (error) {
-    logger.warn(`[GOVPAY][PAYLOAD_SERIALIZE_FAILED][${FILE}][serializePayload] failed to serialize webhook payload - error=${error instanceof Error ? error.message : String(error)}`);
+    logger.warn(`[GOVPAY][WEBHOOK][PAYLOAD_SERIALIZE_FAILED][${FILE}][serializePayload] failed to serialize webhook payload - error=${error instanceof Error ? error.message : String(error)}`);
     return '{}';
   }
 }
@@ -94,11 +94,11 @@ async function handleWebhook(req: WebhookRequest, res: Response): Promise<Respon
   const webhookId: string = (webhookEvent?.webhook_message_id as string) || uuidv4();
   const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
-  logger.info(`[GOVPAY][STARTED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK][STARTED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId}`);
   try {
     return await handleWebhookInternal(req, res, { webhookEvent, paymentId, webhookId, correlationId });
   } finally {
-    logger.info(`[GOVPAY][ENDED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
+    logger.info(`[GOVPAY][WEBHOOK][ENDED][${FILE}][handleWebhook] webhookId=${webhookId} correlationId=${correlationId} durationMs=${Date.now() - start}`);
   }
 }
 
@@ -111,7 +111,7 @@ async function handleWebhookInternal(
 
   // Validate required webhook event structure
   if (!isValidWebhookEvent(webhookEvent)) {
-    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=invalid_webhook_event_structure - webhookId=${webhookId} correlationId=${correlationId}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][handleWebhookInternal] error=invalid_webhook_event_structure - webhookId=${webhookId} correlationId=${correlationId}`);
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.ERROR,
@@ -123,7 +123,7 @@ async function handleWebhookInternal(
 
   // Validate payment ID
   if (!paymentId || typeof paymentId !== 'string' || paymentId.length === 0) {
-    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=missing_or_invalid_payment_id - webhookId=${webhookId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][handleWebhookInternal] error=missing_or_invalid_payment_id - webhookId=${webhookId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.ERROR,
@@ -133,7 +133,7 @@ async function handleWebhookInternal(
     } as WebhookResponse);
   }
 
-  logger.info(`[GOVPAY][WEBHOOK_RECEIVED][${FILE}][handleWebhookInternal] webhook received - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+  logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_RECEIVED][${FILE}][handleWebhookInternal] webhook received - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializePayload(req.body);
@@ -148,7 +148,7 @@ async function handleWebhookInternal(
 
     // Handle duplicate webhooks - idempotency
     if (result.isDuplicate) {
-      logger.info(`[GOVPAY][WEBHOOK_DUPLICATE_ACKNOWLEDGED][${FILE}][handleWebhookInternal] duplicate webhook acknowledged - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_DUPLICATE_ACKNOWLEDGED][${FILE}][handleWebhookInternal] duplicate webhook acknowledged - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.DUPLICATE,
@@ -161,7 +161,7 @@ async function handleWebhookInternal(
 
     // Success: Webhook stored and queued for async processing
     if (result.success) {
-      logger.info(`[GOVPAY][WEBHOOK_QUEUED][${FILE}][handleWebhookInternal] webhook acknowledged and queued - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
+      logger.info(`[GOVPAY][WEBHOOK][WEBHOOK_QUEUED][${FILE}][handleWebhookInternal] webhook acknowledged and queued - webhookId=${webhookId} paymentId=${paymentId} eventType=${webhookEvent.event_type} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: 'success',
@@ -173,7 +173,7 @@ async function handleWebhookInternal(
     }
 
     if (result.retryable) {
-      logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] outcome=retryable_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+      logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][handleWebhookInternal] outcome=retryable_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
       return res.status(HTTP_STATUS.ACCEPTED).json({
         status: WEBHOOK_STATUS.RETRYABLE_ERROR,
@@ -184,7 +184,7 @@ async function handleWebhookInternal(
     }
 
     // Permanent failure (e.g., invalid event type, database constraint violation)
-    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] outcome=permanent_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][handleWebhookInternal] outcome=permanent_error error=${result.error} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`);
 
     return res.status(HTTP_STATUS.ACCEPTED).json({
       status: WEBHOOK_STATUS.PERMANENT_ERROR,
@@ -194,7 +194,7 @@ async function handleWebhookInternal(
     } as WebhookResponse);
 
   } catch (error) {
-    logger.error(`[GOVPAY][FAILED][${FILE}][handleWebhookInternal] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`, {
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][handleWebhookInternal] error=${error instanceof Error ? error.message : String(error)} - webhookId=${webhookId} paymentId=${paymentId} correlationId=${correlationId}`, {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
@@ -214,7 +214,7 @@ async function handleWebhookInternal(
  */
 async function healthCheck(_req: Request, res: Response): Promise<Response> {
   const start = Date.now();
-  logger.info(`[GOVPAY][STARTED][${FILE}][healthCheck] applicationId=n/a`);
+  logger.info(`[GOVPAY][WEBHOOK][STARTED][${FILE}][healthCheck] applicationId=n/a`);
   const health: any = {
     status: 'healthy',
     service: 'payment-webhook-receiver',
@@ -236,7 +236,7 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
 
     if (!dbCheck.connected) {
       health.status = 'unhealthy';
-      logger.error(`[GOVPAY][FAILED][${FILE}][healthCheck] error=database_connectivity_check_failed - error=${dbCheck.error} durationMs=${Date.now() - start}`);
+      logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][healthCheck] error=database_connectivity_check_failed - error=${dbCheck.error} durationMs=${Date.now() - start}`);
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
     }
   } catch (error) {
@@ -245,11 +245,11 @@ async function healthCheck(_req: Request, res: Response): Promise<Response> {
       status: 'down',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-    logger.error(`[GOVPAY][FAILED][${FILE}][healthCheck] error=${error instanceof Error ? error.message : String(error)} durationMs=${Date.now() - start}`);
+    logger.error(`[GOVPAY][WEBHOOK][FAILED][${FILE}][healthCheck] error=${error instanceof Error ? error.message : String(error)} durationMs=${Date.now() - start}`);
     return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(health);
   }
 
-  logger.info(`[GOVPAY][ENDED][${FILE}][healthCheck] status=${health.status} durationMs=${Date.now() - start}`);
+  logger.info(`[GOVPAY][WEBHOOK][ENDED][${FILE}][healthCheck] status=${health.status} durationMs=${Date.now() - start}`);
   return res.status(HTTP_STATUS.OK).json(health);
 }
 

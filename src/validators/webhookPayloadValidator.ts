@@ -301,7 +301,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
   const result = validateWebhookPayload(req.body);
 
   if (!result.valid) {
-    logger.error(`[GOVPAY][FAILED][${FILE}][validateWebhookPayloadMiddleware] error=payload_validation_failed errors=${JSON.stringify(result.errors)}`);
+    logger.error(`[GOVPAY][WEBHOOK_PAYLOAD][FAILED][${FILE}][validateWebhookPayloadMiddleware] error=payload_validation_failed errors=${JSON.stringify(result.errors)}`);
 
     return res.status(400).json({
       error: 'Invalid webhook payload',
@@ -309,7 +309,7 @@ export function validateWebhookPayloadMiddleware(req: any, res: any, next: any):
     });
   }
 
-  logger.info(`[GOVPAY][PAYLOAD_VALIDATED][${FILE}][validateWebhookPayloadMiddleware] payload validation passed - webhookId=${req.body.webhook_message_id} eventType=${req.body.event_type}`);
+  logger.info(`[GOVPAY][WEBHOOK_PAYLOAD][PAYLOAD_VALIDATED][${FILE}][validateWebhookPayloadMiddleware] payload validation passed - webhookId=${req.body.webhook_message_id} eventType=${req.body.event_type}`);
 
   next();
 }
