@@ -125,7 +125,7 @@ async function handleBACSWebhookInternal(
 
 async function BACSHealthCheck(_req: Request, res: Response): Promise<Response> {
   const start = Date.now();
-  logger.info(`[BACS][WEBHOOK][STARTED][${FILE}][BACSHealthCheck] applicationId=n/a`);
+  logger.info(`[BACS][WEBHOOK][STARTED][${FILE}][BACSHealthCheck]`);
   const health = {
     status: 'healthy' as 'healthy' | 'unhealthy',
     service: 'bacs-webhook-receiver',
