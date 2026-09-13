@@ -42,11 +42,11 @@ async function handleBACSWebhook(req: BACSWebhookRequest, res: Response): Promis
   const webhookEvent = req.BACSWebhookEvent;
   const paymentId = req.paymentId;
 
-  const eventId = webhookEvent?.event?.eventId || uuidv4();
-  const deliveryId = webhookEvent?.callback?.deliveryId || uuidv4();
+  const eventId = webhookEvent?.event?.eventId;
+  const deliveryId = webhookEvent?.callback?.deliveryId;
   const correlationId = getRequestContext()?.correlation_id || uuidv4();
 
-  logger.info(`[BACS][STARTED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
+  logger.info(`[BACS][WEBHOOK_RECEIVED][${FILE}][handleBACSWebhook] eventId=${eventId} deliveryId=${deliveryId} correlationId=${correlationId}`);
   try {
     return await handleBACSWebhookInternal(req, res, { webhookEvent, paymentId, eventId, deliveryId, correlationId });
   } finally {
@@ -77,7 +77,6 @@ async function handleBACSWebhookInternal(
     return res.status(HTTP_STATUS.ACCEPTED).json(buildValidationErrorResponse('Missing or invalid payment reference'));
   }
 
-  logger.info(`[BACS][WEBHOOK_RECEIVED][${FILE}][handleBACSWebhookInternal] webhook received - eventId=${eventId} deliveryId=${deliveryId} paymentId=${paymentId} eventType=${webhookEvent.event.eventType} paymentStatus=${webhookEvent.detail.status} attemptNumber=${webhookEvent.callback?.attemptNumber} source=${webhookEvent.event.source} correlationId=${correlationId}`);
 
   try {
     const rawPayload = serializeWebhookPayload(req.body);
