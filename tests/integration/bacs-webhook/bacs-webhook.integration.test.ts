@@ -92,7 +92,8 @@ describe('BACS Webhook Integration Tests', () => {
       expect(dbRecord.webhook_id).toBe(payload.event.eventId);
       expect(dbRecord.payment_id).toBe(payload.payment.paymentReference);
       expect(dbRecord.event_type).toBe(payload.event.eventType);
-      expect(dbRecord.status).toBe(payload.detail.status);
+      expect(dbRecord.status).toBe('pending');
+      expect(dbRecord.raw_payload.detail.status).toBe(payload.detail.status);
       expect(dbRecord.enqueued_at).toBeNull(); // Relay hasn't polled yet
     });
 
@@ -171,7 +172,8 @@ describe('BACS Webhook Integration Tests', () => {
 
       // Verify FAILED status stored
       const dbRecord = await verifyWebhookInDatabase(db, payload.event.eventId);
-      expect(dbRecord.status).toBe('FAILED');
+      expect(dbRecord.status).toBe('pending');
+      expect(dbRecord.raw_payload.detail.status).toBe('FAILED');
     });
 
     test('1.5 Should accept webhook without bacsReference', async () => {
