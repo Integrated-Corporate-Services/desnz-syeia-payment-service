@@ -13,6 +13,12 @@ interface Logger {
   error: (message: string, data?: LogData) => void;
   warn: (message: string, data?: LogData) => void;
   debug: (message: string, data?: LogData) => void;
+  // Marks the start/end of a function's execution with a consistent
+  // [component] [method] START|END message. correlation_id and request_id are
+  // already attached automatically (via enrichLogData), so start/end pairs can be
+  // traced end-to-end by searching for a single correlation id.
+  start: (component: string, method: string, data?: LogData) => void;
+  end: (component: string, method: string, data?: LogData) => void;
 }
 
 const isCloudEnv = ['prod', 'production', 'pre-prod', 'staging', 'dev', 'development'].includes(
@@ -210,6 +216,18 @@ function getLogger(module: NodeModule): Logger {
       enrichedData = filterByEnvironment(enrichedData);
       const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
       winstonLogger.debug(message, sanitizedData);
+    },
+    start: (component: string, method: string, data: LogData = {}): void => {
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.info(`[${component}] [${method}] START`, sanitizedData);
+    },
+    end: (component: string, method: string, data: LogData = {}): void => {
+      let enrichedData = enrichLogData(data, moduleName);
+      enrichedData = filterByEnvironment(enrichedData);
+      const sanitizedData = sanitizeData(enrichedData) as Record<string, unknown>;
+      winstonLogger.info(`[${component}] [${method}] END`, sanitizedData);
     },
   };
 }

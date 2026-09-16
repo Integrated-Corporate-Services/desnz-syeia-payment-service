@@ -6,6 +6,8 @@ import getLogger from '../utils/loggerHelper';
 
 const logger = getLogger(module);
 
+const FILE = 'validateWebhookSignature.ts';
+
 interface WebhookSignatureOptions {
   secret: string;
 }
@@ -41,29 +43,23 @@ export function extractWebhookHeaders(req: WebhookRequest): {
   // Official GOV.UK Pay header name is 'Pay-Signature'
   const signatureHeader = req.headers['pay-signature'];
   const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader || null;
-  
+
   // webhook_message_id comes from body, not headers
   const webhookId = req.body?.webhook_message_id || null;
-  
+
   // Security: Validate webhook_message_id matches GOV.UK Pay format (26 lowercase alphanumeric chars)
   if (webhookId !== null) {
     if (typeof webhookId !== 'string') {
-      logger.warn('[Webhook] Invalid webhook_message_id type - must be string', {
-        webhook_id_type: typeof webhookId,
-        error_category: ERROR_CATEGORIES.VALIDATION,
-      });
+      logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][extractWebhookHeaders] error=invalid_webhook_message_id_type webhookIdType=${typeof webhookId} category=${ERROR_CATEGORIES.VALIDATION}`);
       return { signature, webhookId: null };
     }
 
     if (!GOVUK_PAY_WEBHOOK_MESSAGE_ID_REGEX.test(webhookId)) {
-      logger.warn('[Webhook] Invalid webhook_message_id format', {
-        webhook_id_received: webhookId,
-        error_category: ERROR_CATEGORIES.VALIDATION,
-      });
+      logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][extractWebhookHeaders] error=invalid_webhook_message_id_format category=${ERROR_CATEGORIES.VALIDATION} webhookId=${webhookId}`);
       return { signature, webhookId: null };
     }
   }
-  
+
   return { signature, webhookId };
 }
 
@@ -75,10 +71,7 @@ export function verifyWebhookSignature(
   try {
     return verifyHmacSignature(signature, body, signingKey);
   } catch (error) {
-    logger.error('[Webhook] Signature verification error', {
-      error: error instanceof Error ? error.message : String(error),
-      error_category: ERROR_CATEGORIES.CRYPTOGRAPHY,
-    });
+    logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][verifyWebhookSignature] error=${error instanceof Error ? error.message : String(error)} category=${ERROR_CATEGORIES.CRYPTOGRAPHY}`);
     return false;
   }
 }
@@ -90,7 +83,7 @@ export function verifyWebhookSignature(
 export function parseWebhookEvent(rawBody: Record<string, unknown>): WebhookEvent | null {
   try {
     if (!rawBody || typeof rawBody !== 'object') {
-      logger.warn('[Webhook] Invalid webhook body structure');
+      logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][parseWebhookEvent] error=invalid_webhook_body_structure`);
       return null;
     }
 
@@ -102,20 +95,13 @@ export function parseWebhookEvent(rawBody: Record<string, unknown>): WebhookEven
 
     // Validate essential fields only (more flexible for different webhook formats)
     if (!webhook_message_id || !event_type || !resource) {
-      logger.warn('[Webhook] Webhook missing required fields', {
-        hasWebhookMessageId: !!webhook_message_id,
-        hasApiVersion: !!api_version,
-        hasEventType: !!event_type,
-        hasResourceId: !!extractedResourceId,
-        hasResourceType: !!resource_type,
-        hasResource: !!resource,
-      });
+      logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][parseWebhookEvent] error=webhook_missing_required_fields hasWebhookMessageId=${!!webhook_message_id} hasApiVersion=${!!api_version} hasEventType=${!!event_type} hasResourceId=${!!extractedResourceId} hasResourceType=${!!resource_type} hasResource=${!!resource}`);
       return null;
     }
 
     // Type assertions with validation
     if (typeof webhook_message_id !== 'string' || typeof event_type !== 'string') {
-      logger.warn('[Webhook] Invalid field types');
+      logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][parseWebhookEvent] error=invalid_field_types`);
       return null;
     }
 
@@ -129,9 +115,7 @@ export function parseWebhookEvent(rawBody: Record<string, unknown>): WebhookEven
       resource: resource as Record<string, unknown>,
     };
   } catch (error) {
-    logger.error('[Webhook] Error parsing webhook event', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][parseWebhookEvent] error=${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -146,9 +130,7 @@ export function extractPaymentIdFromEvent(event: WebhookEvent): string | null {
   const paymentId = event.resource_id || (typeof resourcePaymentId === 'string' ? resourcePaymentId : null);
 
   if (!paymentId) {
-    logger.warn('[Webhook] Unable to extract payment ID from event', {
-      webhookMessageId: event.webhook_message_id,
-    });
+    logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][extractPaymentIdFromEvent] error=unable_to_extract_payment_id webhookMessageId=${event.webhook_message_id}`);
     return null;
   }
 
@@ -209,16 +191,14 @@ export function validateWebhookSignatureMiddleware(
   const signingKey = process.env.GOVPAY_WEBHOOK_SIGNING_KEY || '';
 
   if (!signingKey) {
-    logger.error('[Webhook] GOVPAY_WEBHOOK_SIGNING_KEY not configured');
+    logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][validateWebhookSignatureMiddleware] error=signing_key_not_configured`);
     return res.status(500).json({ error: ERROR_MESSAGES.SIGNING_KEY_NOT_CONFIGURED });
   }
 
   const validation = validateWebhookSignature(req, signingKey);
 
   if (!validation.valid) {
-    logger.warn('[Webhook] Webhook validation failed', {
-      error: validation.error,
-    });
+    logger.error(`[GOVPAY][SIGNATURE][FAILED][${FILE}][validateWebhookSignatureMiddleware] error=${validation.error}`);
     return res.status(401).json({ error: validation.error || ERROR_MESSAGES.SIGNATURE_VERIFICATION_FAILED });
   }
 
