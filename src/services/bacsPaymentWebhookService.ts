@@ -4,6 +4,7 @@ import config from '../config/config';
 import { BACSWebhookPayload } from '../types/bacsWebhook.types';
 import {
   WEBHOOK_CREATOR,
+  WEBHOOK_STATUS_PENDING,
   ERROR_CATEGORY_DATABASE,
   ERROR_CATEGORY_CONFIGURATION,
 } from '../constants/bacs.constants';
@@ -32,7 +33,8 @@ export async function processBACSWebhook(
     webhookId,
     paymentId,
     eventType: event.event.eventType,
-    status: event.detail.status,
+    status: WEBHOOK_STATUS_PENDING,
+    paymentStatus: event.detail.status,
     source: event.event.source,
     correlationId,
   });
@@ -60,7 +62,7 @@ export async function processBACSWebhook(
       webhook_id: webhookId,
       payment_id: paymentId,
       event_type: event.event.eventType,
-      status: event.detail.status,
+      status: WEBHOOK_STATUS_PENDING,
       raw_payload: payloadJson,
       created_by: WEBHOOK_CREATOR,
       correlation_id: correlationId,
@@ -81,7 +83,8 @@ export async function processBACSWebhook(
       webhookId,
       paymentId,
       eventType: event.event.eventType,
-      status: event.detail.status,
+      status: WEBHOOK_STATUS_PENDING,
+      paymentStatus: event.detail.status,
       duration,
       correlationId,
       is_duplicate: false,
